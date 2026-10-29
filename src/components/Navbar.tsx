@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Sparkles, Download, Upload, RotateCcw, UtensilsCrossed, ChefHat } from 'lucide-react';
+import { Plus, Search, Sparkles, Download, Upload, RotateCcw, UtensilsCrossed, ChefHat, Share2, CheckCircle } from 'lucide-react';
 
 interface NavbarProps {
   searchQuery: string;
@@ -7,6 +7,7 @@ interface NavbarProps {
   onAddClick: () => void;
   onExport: () => void;
   onImport: () => void;
+  onShare: () => void;
   onReset: () => void;
   onShowWelcome: () => void;
   totalCount: number;
@@ -18,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onAddClick,
   onExport,
   onImport,
+  onShare,
   onReset,
   onShowWelcome,
   totalCount
@@ -105,17 +107,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                   className="fixed inset-0 z-40" 
                   onClick={() => setShowSettingsMenu(false)} 
                 />
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-[#EFE7DE] py-2 z-50 text-sm animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-3.5 py-1.5 text-xs font-bold text-[#8C8274] uppercase tracking-wider">
-                    My Recipe Box
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-[#EFE7DE] py-2 z-50 text-sm animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-3.5 py-1.5 flex items-center justify-between border-b border-[#F5EFE8] mb-1">
+                    <span className="text-[10px] font-bold text-[#8C8274] uppercase tracking-wider">
+                      My Recipe Box
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <CheckCircle className="w-3 h-3 text-emerald-600" />
+                      <span>Saved & Persistent</span>
+                    </span>
                   </div>
+
                   <button
-                    onClick={() => { setShowSettingsMenu(false); onShowWelcome(); }}
+                    onClick={() => { setShowSettingsMenu(false); onShare(); }}
                     className="w-full text-left px-3.5 py-2 text-[#3D372F] hover:bg-[#FFF7F4] flex items-center gap-2.5 transition-colors font-medium cursor-pointer"
                   >
-                    <ChefHat className="w-4 h-4 text-[#FF5B26]" />
-                    <span>Welcome & App Guide</span>
+                    <Share2 className="w-4 h-4 text-[#FF5B26]" />
+                    <div>
+                      <div className="text-xs font-bold text-[#221E1B]">Copy Sync / Share Link</div>
+                      <div className="text-[10px] text-[#8C8274]">Sync across phone, tablet, & computer</div>
+                    </div>
                   </button>
+
                   <button
                     onClick={() => { setShowSettingsMenu(false); onExport(); }}
                     className="w-full text-left px-3.5 py-2 text-[#3D372F] hover:bg-[#FFF7F4] flex items-center gap-2.5 transition-colors font-medium cursor-pointer"
@@ -123,6 +136,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <Download className="w-4 h-4 text-[#FF5B26]" />
                     <span>Backup Recipes (JSON)</span>
                   </button>
+
                   <button
                     onClick={() => { setShowSettingsMenu(false); onImport(); }}
                     className="w-full text-left px-3.5 py-2 text-[#3D372F] hover:bg-[#FFF7F4] flex items-center gap-2.5 transition-colors font-medium cursor-pointer"
@@ -130,7 +144,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <Upload className="w-4 h-4 text-emerald-600" />
                     <span>Restore Backup</span>
                   </button>
+
                   <div className="border-t border-[#F5EFE8] my-1"></div>
+
+                  <button
+                    onClick={() => { setShowSettingsMenu(false); onShowWelcome(); }}
+                    className="w-full text-left px-3.5 py-2 text-[#3D372F] hover:bg-[#FFF7F4] flex items-center gap-2.5 transition-colors font-medium cursor-pointer"
+                  >
+                    <ChefHat className="w-4 h-4 text-[#FF5B26]" />
+                    <span>Welcome & App Guide</span>
+                  </button>
+
                   <button
                     onClick={() => { setShowSettingsMenu(false); onReset(); }}
                     className="w-full text-left px-3.5 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors font-medium cursor-pointer"
