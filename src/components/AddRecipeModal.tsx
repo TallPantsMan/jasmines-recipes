@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../types/recipe';
-import { parseRecipeFromHtml, parseRawRecipeText } from '../services/recipeParser';
+import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl } from '../services/recipeParser';
 import { processCookbookImage, type OcrProgress } from '../services/ocrService';
 import {
   X, Globe, BookOpen, PenTool, Sparkles,
-  Camera, Loader2, Bookmark
+  Camera, Loader2, Bookmark, ExternalLink
 } from 'lucide-react';
 import { InstagramIcon } from './Icons';
 
@@ -34,6 +34,12 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeError, setScrapeError] = useState('');
   
+  // Instagram Intake State
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [isPullingInstagram, setIsPullingInstagram] = useState(false);
+  const [instagramError, setInstagramError] = useState<string | null>(null);
+  const [showManualCaptionFallback, setShowManualCaptionFallback] = useState(false);
+
   const [pastedText, setPastedText] = useState('');
   const [pastedTitle, setPastedTitle] = useState('');
 
@@ -78,6 +84,9 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     if (parsed.categories && parsed.categories.length > 0) {
       setCategoriesInput(parsed.categories.join(', '));
     }
+    if (parsed.tags && parsed.tags.length > 0) {
+      setTagsInput(parsed.tags.join(', '));
+    }
     if (parsed.ingredients && parsed.ingredients.length > 0) {
       setIngredientsText(parsed.ingredients.map(i => i.raw).join('\n'));
     }
@@ -92,15 +101,23 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     e.preventDefault();
     if (!urlInput.trim()) return;
 
+    let targetUrl = urlInput.trim();
+    if (!targetUrl.startsWith('http')) {
+      targetUrl = 'https://' + targetUrl;
+    }
+
+    // Auto-detect Instagram link pasted into website tab
+    if (targetUrl.includes('instagram.com')) {
+      setActiveTab('instagram');
+      setInstagramUrl(targetUrl);
+      handlePullInstagram(targetUrl);
+      return;
+    }
+
     setIsScraping(true);
     setScrapeError('');
 
     try {
-      let targetUrl = urlInput.trim();
-      if (!targetUrl.startsWith('http')) {
-        targetUrl = 'https://' + targetUrl;
-      }
-
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
       const res = await fetch(proxyUrl);
       if (!res.ok) throw new Error('Could not fetch URL content');
@@ -122,12 +139,46 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     }
   };
 
-  // 2. Instagram / Text Parser
+  // 2. Instagram Link Puller
+  const handlePullInstagram = async (urlOverride?: string) => {
+    const target = (urlOverride || instagramUrl).trim();
+    if (!target) return;
+
+    setIsPullingInstagram(true);
+    setInstagramError(null);
+    setShowManualCaptionFallback(false);
+
+    try {
+      const result = await fetchInstagramRecipeFromUrl(target);
+      if (result.success && result.recipe) {
+        setSourceType('instagram');
+        if (result.sourceUrl) setSourceUrl(result.sourceUrl);
+        if (result.authorName) setSourceName(result.authorName);
+        applyParsedRecipe(result.recipe);
+      } else {
+        setInstagramError(
+          result.error ||
+          'Instagram requires verification for this reel. Tap "Open Reel" to view and copy the caption, then paste it below!'
+        );
+        setShowManualCaptionFallback(true);
+        if (result.sourceUrl) setSourceUrl(result.sourceUrl);
+        if (result.authorName) setSourceName(result.authorName);
+      }
+    } catch (err: any) {
+      setInstagramError(err.message || 'Could not pull Instagram recipe.');
+      setShowManualCaptionFallback(true);
+    } finally {
+      setIsPullingInstagram(false);
+    }
+  };
+
+  // 3. Instagram / Text Parser
   const handleParseText = () => {
     if (!pastedText.trim()) return;
     const parsed = parseRawRecipeText(pastedText, pastedTitle);
     setSourceType('instagram');
     if (!sourceName) setSourceName('Instagram Post');
+    if (instagramUrl && !sourceUrl) setSourceUrl(instagramUrl);
     applyParsedRecipe(parsed);
   };
 
@@ -365,47 +416,123 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: INSTAGRAM / TEXT */}
+          {/* TAB 2: INSTAGRAM LINK OR CAPTION */}
           {activeTab === 'instagram' && (
             <div className="space-y-4 max-w-xl mx-auto py-2 sm:py-4">
-              <div className="text-center space-y-1 mb-3">
+              <div className="text-center space-y-1.5 mb-4">
                 <div className="w-12 h-12 rounded-3xl bg-pink-50 text-[#E1306C] flex items-center justify-center mx-auto shadow-xs">
                   <InstagramIcon className="w-6 h-6" />
                 </div>
-                <h3 className="font-serif text-lg font-bold text-[#221E1B]">
-                  Paste Instagram Caption or Raw Text
+                <h3 className="font-serif text-lg sm:text-xl font-bold text-[#221E1B]">
+                  Import from Instagram Reel or Post
                 </h3>
-                <p className="text-xs text-[#7A7165]">
-                  Copy the caption from an Instagram Reel or a message.
+                <p className="text-xs text-[#7A7165] max-w-md mx-auto">
+                  Paste any Instagram Reel or post link below to pull the recipe directly from the caption.
                 </p>
               </div>
 
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={pastedTitle}
-                  onChange={(e) => setPastedTitle(e.target.value)}
-                  placeholder="Recipe Title (optional, e.g. Spicy Vodka Rigatoni)"
-                  className="w-full px-4 py-2.5 rounded-2xl border border-[#E8DFC9] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/20"
-                />
+              {/* Primary Link Input & Puller */}
+              <div className="space-y-3 p-4 sm:p-5 bg-white rounded-3xl border border-[#EFE7DE] shadow-xs">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#665D52]">
+                  Instagram Reel / Post Link
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={instagramUrl}
+                    onChange={(e) => setInstagramUrl(e.target.value)}
+                    placeholder="https://www.instagram.com/reel/C... or p/..."
+                    className="flex-1 px-4 py-3 rounded-2xl border border-[#E8DFC9] bg-[#FDFBF7] text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-[#E1306C] text-[#221E1B]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handlePullInstagram()}
+                    disabled={isPullingInstagram || !instagramUrl.trim()}
+                    className="py-3 px-5 rounded-2xl bg-gradient-to-r from-[#E1306C] to-[#FF5B26] hover:opacity-95 disabled:opacity-50 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-pink-600/20 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    {isPullingInstagram ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Pulling Caption...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Pull from Caption</span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
-                <textarea
-                  rows={6}
-                  value={pastedText}
-                  onChange={(e) => setPastedText(e.target.value)}
-                  placeholder={`Paste the caption here...\n\nExample:\nCreamy Garlic Pasta\nIngredients:\n1 lb pasta\n4 cloves garlic\n1/2 cup parmesan\n\nDirections:\n1. Boil pasta\n2. Cook garlic in olive oil...`}
-                  className="w-full px-4 py-3 rounded-2xl border border-[#E8DFC9] bg-white text-xs sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-pink-500/20 leading-relaxed"
-                />
+                {instagramError && (
+                  <div className="p-3.5 bg-amber-50 text-amber-900 text-xs rounded-2xl border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                    <span className="leading-relaxed">{instagramError}</span>
+                    {instagramUrl && (
+                      <a
+                        href={instagramUrl.startsWith('http') ? instagramUrl : `https://${instagramUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-bold text-[#E1306C] hover:underline whitespace-nowrap shrink-0"
+                      >
+                        <span>Open Reel</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
 
-                <button
-                  type="button"
-                  onClick={handleParseText}
-                  disabled={!pastedText.trim()}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-[#E1306C] hover:bg-[#C1275C] disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-pink-600/20 transition-all cursor-pointer"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Auto-Organize Recipe</span>
-                </button>
+              {/* Manual Caption Paste Accordion / Fallback */}
+              <div className="p-4 sm:p-5 bg-white rounded-3xl border border-[#EFE7DE] shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-[#221E1B]">
+                      {showManualCaptionFallback ? 'Paste Caption Text:' : 'Or Paste Caption Text Manually'}
+                    </span>
+                    <p className="text-[11px] text-[#7A7165]">
+                      Copy-paste the caption text from Instagram, TikTok, or messages
+                    </p>
+                  </div>
+                  {!showManualCaptionFallback && (
+                    <button
+                      type="button"
+                      onClick={() => setShowManualCaptionFallback(true)}
+                      className="text-xs font-bold text-[#E1306C] hover:underline cursor-pointer"
+                    >
+                      Show Text Box
+                    </button>
+                  )}
+                </div>
+
+                {(showManualCaptionFallback || pastedText.length > 0) && (
+                  <div className="space-y-3 pt-1">
+                    <input
+                      type="text"
+                      value={pastedTitle}
+                      onChange={(e) => setPastedTitle(e.target.value)}
+                      placeholder="Recipe Title (optional, e.g. Spicy Rigatoni)"
+                      className="w-full px-4 py-2.5 rounded-2xl border border-[#E8DFC9] bg-[#FDFBF7] text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/20 text-[#221E1B]"
+                    />
+
+                    <textarea
+                      rows={5}
+                      value={pastedText}
+                      onChange={(e) => setPastedText(e.target.value)}
+                      placeholder={`Paste caption text here...\n\nExample:\nCreamy Garlic Pasta\nIngredients:\n1 lb pasta\n4 cloves garlic\n1/2 cup parmesan\n\nDirections:\n1. Boil pasta\n2. Sauté garlic...`}
+                      className="w-full px-4 py-3 rounded-2xl border border-[#E8DFC9] bg-[#FDFBF7] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-pink-500/20 leading-relaxed text-[#221E1B]"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleParseText}
+                      disabled={!pastedText.trim()}
+                      className="w-full py-3 px-4 rounded-2xl bg-[#221E1B] hover:bg-[#38332E] disabled:opacity-40 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-[#FF5B26]" />
+                      <span>Organize Recipe from Pasted Text</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
