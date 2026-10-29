@@ -31,13 +31,35 @@ export function App() {
   }, []);
   const [cookModeState, setCookModeState] = useState<{ recipe: Recipe; servings: number } | null>(null);
 
-  // Initial load
+  // Initial load & share link sync
   useEffect(() => {
     async function loadData() {
       try {
         await RecipeService.init();
         const loaded = await RecipeService.getAllRecipes();
         setRecipes(loaded);
+
+        // Check if user opened a cross-device ?share= sync link
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const shareData = params.get('share');
+          if (shareData) {
+            try {
+              const decoded = decodeURIComponent(atob(shareData));
+              const sharedRecipes = JSON.parse(decoded);
+              if (Array.isArray(sharedRecipes) && sharedRecipes.length > 0) {
+                if (confirm(`Sync ${sharedRecipes.length} recipes from shared link into your kitchen recipe box?`)) {
+                  await RecipeService.importFromJson(decoded);
+                  const merged = await RecipeService.getAllRecipes();
+                  setRecipes(merged);
+                  window.history.replaceState({}, '', window.location.pathname);
+                }
+              }
+            } catch (e) {
+              console.warn('Could not decode share link', e);
+            }
+          }
+        }
       } catch (err) {
         console.error('Failed to initialize recipes:', err);
       } finally {
@@ -46,6 +68,24 @@ export function App() {
     }
     loadData();
   }, []);
+
+  // Real-time autosave to localStorage whenever recipes change
+  useEffect(() => {
+    if (recipes.length > 0) {
+      RecipeService.syncToLocalStorage(recipes);
+    }
+  }, [recipes]);
+
+  // Window unload listener
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (recipes.length > 0) {
+        RecipeService.syncToLocalStorage(recipes);
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [recipes]);
 
   // Filtered & Searched recipes
   const filteredRecipes = useMemo(() => {
@@ -238,6 +278,26 @@ export function App() {
     input.click();
   };
 
+  const handleShareBox = () => {
+    try {
+      const exportable = recipes.map(r => ({
+        ...r,
+        userPhotos: [] // Keep share URLs compact without huge photo bytes
+      }));
+      const encoded = btoa(encodeURIComponent(JSON.stringify(exportable)));
+      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${encoded}`;
+      
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(shareUrl);
+        alert('Recipe Box Sync Link copied to clipboard!\n\nOpen this link on Jasmine\'s phone or any other device to sync all recipes.');
+      } else {
+        prompt('Copy this sync link to transfer recipes across devices:', shareUrl);
+      }
+    } catch {
+      handleExportBackup();
+    }
+  };
+
   const handleResetDefaults = async () => {
     if (confirm('Reset your recipe box to the original sample recipes? This will overwrite your changes.')) {
       await RecipeService.resetToDefaults();
@@ -259,6 +319,7 @@ export function App() {
         }}
         onExport={handleExportBackup}
         onImport={handleImportBackup}
+        onShare={handleShareBox}
         onReset={handleResetDefaults}
         onShowWelcome={() => setIsWelcomeOpen(true)}
         totalCount={recipes.length}
