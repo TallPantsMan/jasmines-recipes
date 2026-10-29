@@ -10,7 +10,17 @@ interface CategoryFilterBarProps {
   wantToTryCount: number;
 }
 
-const CATEGORIES: { id: FilterCategory; label: string; icon: React.ReactNode }[] = [\n  { id: 'All', label: 'All Recipes', icon: <Utensils className="w-3.5 h-3.5" /> },\n  { id: 'Want to Try', label: 'Want to Try', icon: <Bookmark className="w-3.5 h-3.5 fill-current" /> },\n  { id: 'Favorites', label: 'Favorites', icon: <Heart className="w-3.5 h-3.5 fill-current" /> },\n  { id: 'Dinners', label: 'Dinners', icon: <Sparkles className="w-3.5 h-3.5" /> },\n  { id: 'Quick (<30m)', label: 'Quick (<30m)', icon: <Clock className="w-3.5 h-3.5" /> },\n  { id: 'Instagram', label: 'Instagram', icon: <InstagramIcon className="w-3.5 h-3.5" /> },\n  { id: 'Cookbooks', label: 'Cookbooks', icon: <BookOpen className="w-3.5 h-3.5" /> },\n  { id: 'Baking', label: 'Baking', icon: <Cake className="w-3.5 h-3.5" /> },\n  { id: 'Salads & Sides', label: 'Salads & Sides', icon: <Salad className="w-3.5 h-3.5" /> },\n];
+const CATEGORIES: { id: FilterCategory; label: string; icon: React.ReactNode }[] = [
+  { id: 'All', label: 'All Recipes', icon: <Utensils className="w-3.5 h-3.5" /> },
+  { id: 'Want to Try', label: 'Want to Try', icon: <Bookmark className="w-3.5 h-3.5 fill-current" /> },
+  { id: 'Favorites', label: 'Favorites', icon: <Heart className="w-3.5 h-3.5 fill-current" /> },
+  { id: 'Dinners', label: 'Dinners', icon: <Sparkles className="w-3.5 h-3.5" /> },
+  { id: 'Quick (<30m)', label: 'Quick (<30m)', icon: <Clock className="w-3.5 h-3.5" /> },
+  { id: 'Instagram', label: 'Instagram', icon: <InstagramIcon className="w-3.5 h-3.5" /> },
+  { id: 'Cookbooks', label: 'Cookbooks', icon: <BookOpen className="w-3.5 h-3.5" /> },
+  { id: 'Baking', label: 'Baking', icon: <Cake className="w-3.5 h-3.5" /> },
+  { id: 'Salads & Sides', label: 'Salads & Sides', icon: <Salad className="w-3.5 h-3.5" /> },
+];
 
 export const CategoryFilterBar: React.FC<CategoryFilterBarProps> = ({
   selectedCategory,

@@ -58,7 +58,19 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
     >
       {/* Cover Image & ReciMe Floating Badges */}
       <div className="relative aspect-[16/11] sm:aspect-[4/3] w-full overflow-hidden bg-[#F5EFE7]">
-        {recipe.coverImage ? (\n          <img\n            src={recipe.coverImage}\n            alt={recipe.title}\n            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"\n            loading="lazy"\n          />\n        ) : (\n          <div className="w-full h-full flex flex-col items-center justify-center text-[#B5ABA0] gap-2">\n            <Utensils className="w-10 h-10 stroke-[1.5]" />\n            <span className="text-xs font-semibold">No cover photo</span>\n          </div>\n        )}
+        {recipe.coverImage ? (
+          <img
+            src={recipe.coverImage}
+            alt={recipe.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-[#B5ABA0] gap-2">
+            <Utensils className="w-10 h-10 stroke-[1.5]" />
+            <span className="text-xs font-semibold">No cover photo</span>
+          </div>
+        )}
 
         {/* Top-Left Source Pill */}
         <div className="absolute top-3 left-3 flex items-center gap-1.5">
@@ -103,7 +115,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
         {/* User Photos Badge */}
         {recipe.userPhotos && recipe.userPhotos.length > 0 && (
           <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full text-[11px] font-bold bg-black/70 text-white backdrop-blur-md flex items-center gap-1">
-            <span>📷</span>
+            <span>📸</span>
             <span>{recipe.userPhotos.length}</span>
           </div>
         )}

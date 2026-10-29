@@ -143,7 +143,15 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
 
             {/* Rating Stars */}
             <div className="flex items-center gap-1 bg-white px-2.5 py-1.5 rounded-full border border-[#EFE7DE] shadow-xs">
-              {[1, 2, 3, 4, 5].map((star) => (\n                <button\n                  key={star}\n                  onClick={() => onUpdateRating(recipe.id, star === recipe.rating ? 0 : star)}\n                  className="p-0.5 text-amber-400 hover:scale-110 transition-transform cursor-pointer"\n                >\n                  <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${star <= recipe.rating ? 'fill-current' : 'text-gray-200'}`} />\n                </button>\n              ))}
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => onUpdateRating(recipe.id, star === recipe.rating ? 0 : star)}
+                  className="p-0.5 text-amber-400 hover:scale-110 transition-transform cursor-pointer"
+                >
+                  <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${star <= recipe.rating ? 'fill-current' : 'text-gray-200'}`} />
+                </button>
+              ))}
             </div>
           </div>
 
@@ -238,8 +246,16 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
               {/* Title & Metadata */}
               <div>
                 <div className="flex flex-wrap gap-1.5 mb-2.5">
-                  {recipe.categories.map((cat, idx) => (\n                    <span key={idx} className="text-xs font-bold px-3 py-0.5 rounded-full bg-[#FFEFEA] text-[#FF5B26]">\n                      {cat}\n                    </span>\n                  ))}
-                  {recipe.tags.map((tag, idx) => (\n                    <span key={idx} className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#F5EFE6] text-[#6E6457]">\n                      #{tag}\n                    </span>\n                  ))}
+                  {recipe.categories.map((cat, idx) => (
+                    <span key={idx} className="text-xs font-bold px-3 py-0.5 rounded-full bg-[#FFEFEA] text-[#FF5B26]">
+                      {cat}
+                    </span>
+                  ))}
+                  {recipe.tags.map((tag, idx) => (
+                    <span key={idx} className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#F5EFE6] text-[#6E6457]">
+                      #{tag}
+                    </span>
+                  ))}
                 </div>
 
                 <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#221E1B] leading-tight">

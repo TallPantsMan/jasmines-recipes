@@ -105,7 +105,12 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
             <span>Cooking for {initialServings} servings</span>
           </span>
 
-          {wakeLockActive && (\n            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">\n              <Sun className="w-3 h-3" />\n              <span>Screen Awake</span>\n            </span>\n          )}
+          {wakeLockActive && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
+              <Sun className="w-3 h-3" />
+              <span>Screen Awake</span>
+            </span>
+          )}
         </div>
 
         <div className="text-center font-serif text-xs sm:text-base font-bold text-white/90 truncate max-w-[160px] sm:max-w-md">
