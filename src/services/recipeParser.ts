@@ -168,23 +168,51 @@ export function parseRecipeFromHtml(html: string, sourceUrl: string): Partial<Re
  * Intelligently parse raw pasted text (e.g., from an Instagram reel caption or cookbook text)
  */
 export function parseRawRecipeText(text: string, titleHint?: string): Partial<Recipe> {
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  // Pre-normalize text to handle inline section keywords or collapsed line breaks
+  const preprocessed = text
+    .replace(/\r\n/g, '\n')
+    .replace(/\s*\b(ingredients|what you need|shopping list|grocery list|you'll need|for the sauce|for the marinade)[\s:]+/gi, '\nIngredients:\n')
+    .replace(/\s*\b(instructions|directions|method|how to make|steps|preparation)[\s:]+/gi, '\nInstructions:\n')
+    .replace(/(\b\d+[\.\)])\s+/g, '\n$1 ');
+
+  const lines = preprocessed.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
   
   let title = titleHint || '';
   let description = '';
   const ingredients: Ingredient[] = [];
   const instructions: InstructionStep[] = [];
+  const tags: string[] = [];
 
   type SectionType = 'header' | 'ingredients' | 'instructions' | 'notes';
   let currentSection: SectionType = 'header';
   let detectedTitle = false;
 
-  const ingredientKeywords = /^(ingredients|what you need|shopping list|grocery list)[\s:]*$/i;
-  const instructionKeywords = /^(instructions|directions|method|how to make|steps|preparation)[\s:]*$/i;
-  const notesKeywords = /^(notes|jasmine's notes|tips|variations)[\s:]*$/i;
+  const ingredientKeywords = /^(?:[✨👉👇•\*\-#\s]*)\b(ingredients|what you need|shopping list|grocery list|you'll need|for the sauce|for the marinade)\b[\s:]*$/i;
+  const instructionKeywords = /^(?:[✨👉👇•\*\-#\s]*)\b(instructions|directions|method|how to make|steps|preparation|how to|process)\b[\s:]*$/i;
+  const notesKeywords = /^(?:[✨👉👇•\*\-#\s]*)\b(notes|jasmine's notes|tips|variations)\b[\s:]*$/i;
+  const isHashtagLine = (l: string) => /^(#[A-Za-z0-9_]+\s*)+$/.test(l) || (l.startsWith('#') && (l.match(/#/g) || []).length >= 2);
+  const isSocialPromoLine = (l: string) => /^(follow\s+@|subscribe|link in bio|save this for later|tap link|share with a friend)/i.test(l);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    // Extract hashtags into tags
+    if (line.includes('#')) {
+      const foundTags = line.match(/#([A-Za-z0-9_]+)/g);
+      if (foundTags) {
+        foundTags.forEach(t => {
+          const cleanTag = t.replace('#', '').toLowerCase();
+          if (cleanTag.length > 2 && !['fyp', 'foryou', 'reels', 'viral', 'explore', 'explorepage'].includes(cleanTag)) {
+            if (!tags.includes(cleanTag)) tags.push(cleanTag);
+          }
+        });
+      }
+    }
+
+    // Skip promo lines or hashtag-only lines from instructions/ingredients
+    if (isHashtagLine(line) || isSocialPromoLine(line)) {
+      continue;
+    }
 
     // Check section transitions
     if (ingredientKeywords.test(line)) {
@@ -203,7 +231,7 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
     // Auto-detect title from first line if not already set
     if (!detectedTitle && !title && currentSection === 'header') {
       if (line.length < 90 && !line.match(/^\d+[\.\)]/) && !line.includes('http')) {
-        title = line.replace(/^[#\*\-]+\s*/, '');
+        title = line.replace(/^[#\*\-✨👉👇•\s]+/, '').replace(/[\s✨👉👇]+$/, '');
         detectedTitle = true;
         continue;
       }
@@ -213,9 +241,14 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
       // Check if line looks like an ingredient (starts with amount/bullet)
       if (/^(\d|½|¼|¾|⅓|⅔|\-|\*|•)/.test(line) && line.length < 100) {
         currentSection = 'ingredients';
-        ingredients.push({
-          id: `ing-${Date.now()}-${ingredients.length}`,
-          raw: line.replace(/^[\-\*•]\s*/, '')
+        const rawItems = line.includes('•') ? line.split(/\s*•\s*/) : [line];
+        rawItems.forEach(item => {
+          if (item.trim()) {
+            ingredients.push({
+              id: `ing-${Date.now()}-${ingredients.length}`,
+              raw: item.trim().replace(/^[\-\*•]\s*/, '')
+            });
+          }
         });
       } else {
         description += (description ? ' ' : '') + line;
@@ -224,29 +257,47 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
       // Check if line suddenly looks like an instruction
       if (/^(step\s*\d+|\d+\.)\s+/i.test(line)) {
         currentSection = 'instructions';
-        instructions.push({
-          id: `step-${Date.now()}-${instructions.length}`,
-          stepNumber: instructions.length + 1,
-          text: line.replace(/^(step\s*\d+|\d+\.)\s+/i, '')
-        });
+        const cleanText = line
+          .replace(/^(step\s*\d+|\d+\.)\s+/i, '')
+          .replace(/(\s*#[A-Za-z0-9_]+)+\s*$/, '')
+          .trim();
+        if (cleanText) {
+          instructions.push({
+            id: `step-${Date.now()}-${instructions.length}`,
+            stepNumber: instructions.length + 1,
+            text: cleanText
+          });
+        }
       } else {
-        ingredients.push({
-          id: `ing-${Date.now()}-${ingredients.length}`,
-          raw: line.replace(/^[\-\*•]\s*/, '')
+        const rawItems = line.includes('•') ? line.split(/\s*•\s*/) : [line];
+        rawItems.forEach(item => {
+          if (item.trim()) {
+            ingredients.push({
+              id: `ing-${Date.now()}-${ingredients.length}`,
+              raw: item.trim().replace(/^[\-\*•]\s*/, '')
+            });
+          }
         });
       }
     } else if (currentSection === 'instructions') {
-      instructions.push({
-        id: `step-${Date.now()}-${instructions.length}`,
-        stepNumber: instructions.length + 1,
-        text: line.replace(/^(step\s*\d+|\d+[\.\)])\s+/i, '')
-      });
+      const cleanText = line
+        .replace(/^(step\s*\d+|\d+[\.\)])\s+/i, '')
+        .replace(/(\s*#[A-Za-z0-9_]+)+\s*$/, '')
+        .trim();
+      if (cleanText) {
+        instructions.push({
+          id: `step-${Date.now()}-${instructions.length}`,
+          stepNumber: instructions.length + 1,
+          text: cleanText
+        });
+      }
     }
   }
 
   // If no sections were marked explicitly, heuristic split
   if (ingredients.length === 0 && instructions.length === 0 && lines.length > 0) {
     lines.forEach((l) => {
+      if (isHashtagLine(l) || isSocialPromoLine(l)) return;
       if (/^(\d|½|¼|¾|⅓|⅔|\-|\*|•)/.test(l)) {
         ingredients.push({
           id: `ing-${Date.now()}-${ingredients.length}`,
@@ -263,12 +314,140 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
   }
 
   return {
-    title: title || 'Pasted Recipe',
+    title: title || 'Instagram Recipe',
     description: description.slice(0, 200),
     ingredients,
     instructions,
     servings: 4,
-    categories: ['Dinners'],
-    tags: []
+    categories: ['Dinners', 'Instagram'],
+    tags
+  };
+}
+
+export interface InstagramFetchResult {
+  success: boolean;
+  recipe?: Partial<Recipe>;
+  caption?: string;
+  sourceUrl: string;
+  authorName: string;
+  error?: string;
+}
+
+/**
+ * Extracts a recipe from an Instagram link by pulling its caption
+ */
+export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promise<InstagramFetchResult> {
+  const trimmed = inputUrlOrText.trim();
+
+  // 1. Extract Instagram URL if present
+  const urlMatch = trimmed.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[A-Za-z0-9_.-]+\/)?(?:p|reel|reels|share\/reel)\/([A-Za-z0-9_-]+)\/?(?:\?[^\s]*)?/i);
+  const targetUrl = urlMatch ? urlMatch[0] : (trimmed.startsWith('http') ? trimmed.split(/\s+/)[0] : '');
+
+  // Check if user pasted a link with caption together in the same text
+  let remainingText = targetUrl ? trimmed.replace(targetUrl, '').trim() : '';
+  // If newlines were collapsed, insert breaks before common keywords
+  if (remainingText) {
+    remainingText = remainingText
+      .replace(/\s*(ingredients|what you need|you'll need)[\s:]+/gi, '\nIngredients:\n')
+      .replace(/\s*(instructions|directions|method|how to make|steps)[\s:]+/gi, '\nInstructions:\n')
+      .replace(/(\d+[\.\)])\s+/g, '\n$1 ');
+  }
+
+  // Extract handle if available
+  const userMatch = targetUrl.match(/instagram\.com\/([A-Za-z0-9_.-]+)\/(?:reel|p)\//);
+  const authorName = userMatch && !['p', 'reel', 'reels', 'share'].includes(userMatch[1])
+    ? `@${userMatch[1]} on Instagram`
+    : 'Instagram Reel';
+
+  // If caption was already pasted along with the URL in the text
+  if (remainingText.length > 25) {
+    const parsed = parseRawRecipeText(remainingText);
+    return {
+      success: true,
+      recipe: {
+        ...parsed,
+        sourceType: 'instagram',
+        sourceUrl: targetUrl || inputUrlOrText,
+        sourceName: authorName,
+        categories: ['Dinners', 'Instagram']
+      },
+      caption: remainingText,
+      sourceUrl: targetUrl || inputUrlOrText,
+      authorName
+    };
+  }
+
+  if (!targetUrl) {
+    throw new Error('Please enter a valid Instagram post or reel link');
+  }
+
+  // 2. Query serverless endpoint /api/instagram
+  try {
+    const apiRes = await fetch(`/api/instagram?url=${encodeURIComponent(targetUrl)}`);
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.caption && data.caption.length > 10) {
+        const parsed = parseRawRecipeText(data.caption);
+        return {
+          success: true,
+          recipe: {
+            ...parsed,
+            sourceType: 'instagram',
+            sourceUrl: targetUrl,
+            sourceName: data.authorName || authorName,
+            categories: ['Dinners', 'Instagram']
+          },
+          caption: data.caption,
+          sourceUrl: targetUrl,
+          authorName: data.authorName || authorName
+        };
+      }
+    }
+  } catch {
+    // Continue to proxy fallback
+  }
+
+  // 3. Fallback to public CORS proxies
+  try {
+    const match = targetUrl.match(/\/(?:p|reel|reels|share\/reel)\/([A-Za-z0-9_-]+)/);
+    const shortcode = match ? match[1] : '';
+    if (shortcode) {
+      const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(embedUrl)}`;
+      const res = await fetch(proxyUrl);
+      if (res.ok) {
+        const json = await res.json();
+        const html = json.contents || '';
+        const captionMatch = html.match(/class="Caption"[^>]*>([\s\S]*?)<\/div>/i);
+        if (captionMatch) {
+          const caption = captionMatch[1].replace(/<[^>]+>/g, '').trim();
+          if (caption.length > 10) {
+            const parsed = parseRawRecipeText(caption);
+            return {
+              success: true,
+              recipe: {
+                ...parsed,
+                sourceType: 'instagram',
+                sourceUrl: targetUrl,
+                sourceName: authorName,
+                categories: ['Dinners', 'Instagram']
+              },
+              caption,
+              sourceUrl: targetUrl,
+              authorName
+            };
+          }
+        }
+      }
+    }
+  } catch {
+    // Continue to failure reporting
+  }
+
+  return {
+    success: false,
+    sourceUrl: targetUrl,
+    authorName,
+    error: 'Instagram requires verification for this specific link. You can paste the copied caption text below to format in 1 click!'
   };
 }
