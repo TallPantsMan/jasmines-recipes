@@ -293,7 +293,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       <div className="bg-[#FDFBF7] w-full max-w-4xl h-[100dvh] sm:h-auto sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col sm:max-h-[94vh] border border-[#EFE7DE]">
         
         {/* ReciMe Header */}
-        <div className="bg-white px-5 sm:px-7 py-3.5 sm:py-4 border-b border-[#EFE7DE] flex items-center justify-between">
+        <div style={{ paddingTop: "max(1.25rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))" }} className="bg-white px-5 sm:px-7 py-3.5 sm:py-4 border-b border-[#EFE7DE] flex items-center justify-between">
           <div>
             <h2 className="font-serif text-lg sm:text-2xl font-bold text-[#221E1B]">
               {initialRecipe ? 'Edit Recipe' : 'Import New Recipe'}
@@ -362,7 +362,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="overflow-y-auto flex-1 p-4 sm:p-7">
+        <div style={{ paddingBottom: "max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))" }} className="overflow-y-auto flex-1 p-4 sm:p-7">
           
           {/* TAB 1: WEBSITE LINK */}
           {activeTab === 'website' && (

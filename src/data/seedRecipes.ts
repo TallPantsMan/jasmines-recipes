@@ -8,7 +8,7 @@ export const SEED_RECIPES: Recipe[] = [
     sourceType: 'instagram',
     sourceUrl: 'https://instagram.com/reel/example-chili-pasta',
     sourceName: '@broccyourbody on Instagram',
-    coverImage: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281781?auto=format&fit=crop&w=1200&q=80',
+    coverImage: 'https://images.unsplash.com/photo-1608897013039-887f21d8c804?auto=format&fit=crop&w=1200&q=80',
     userPhotos: [
       'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=1000&q=80'
     ],
