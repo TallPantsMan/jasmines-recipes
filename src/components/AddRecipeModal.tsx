@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../types/recipe';
 import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl } from '../services/recipeParser';
 import { processCookbookImage, type OcrProgress } from '../services/ocrService';
+import { fetchPageHtml } from '../services/pageFetcher';
 import {
   X, Globe, BookOpen, PenTool, Sparkles,
   Camera, Loader2, Bookmark, ExternalLink
@@ -33,7 +34,9 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [urlInput, setUrlInput] = useState('');
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeError, setScrapeError] = useState('');
-  
+  // Shown on the review form when an import came back without ingredients or steps
+  const [importNotice, setImportNotice] = useState('');
+
   // Instagram Intake State
   const [instagramUrl, setInstagramUrl] = useState('');
   const [isPullingInstagram, setIsPullingInstagram] = useState(false);
@@ -73,25 +76,30 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 
   // Apply parsed recipe to form
   const applyParsedRecipe = (parsed: Partial<Recipe>) => {
-    if (parsed.title) setTitle(parsed.title);
-    if (parsed.description) setDescription(parsed.description);
-    if (parsed.sourceName) setSourceName(parsed.sourceName);
-    if (parsed.sourceUrl) setSourceUrl(parsed.sourceUrl);
-    if (parsed.coverImage) setCoverImage(parsed.coverImage);
-    if (parsed.servings) setServings(parsed.servings);
-    if (parsed.prepTimeMinutes) setPrepTimeMinutes(parsed.prepTimeMinutes);
-    if (parsed.cookTimeMinutes) setCookTimeMinutes(parsed.cookTimeMinutes);
-    if (parsed.categories && parsed.categories.length > 0) {
-      setCategoriesInput(parsed.categories.join(', '));
-    }
-    if (parsed.tags && parsed.tags.length > 0) {
-      setTagsInput(parsed.tags.join(', '));
-    }
-    if (parsed.ingredients && parsed.ingredients.length > 0) {
-      setIngredientsText(parsed.ingredients.map(i => i.raw).join('\n'));
-    }
-    if (parsed.instructions && parsed.instructions.length > 0) {
-      setInstructionsText(parsed.instructions.map(i => i.text).join('\n\n'));
+    // An import replaces the whole form, so a second import never inherits the first one's leftovers
+    setTitle(parsed.title || '');
+    setDescription(parsed.description || '');
+    setSourceName(parsed.sourceName || '');
+    setSourceUrl(parsed.sourceUrl || '');
+    setCoverImage(parsed.coverImage || '');
+    setServings(parsed.servings || 4);
+    setPrepTimeMinutes(parsed.prepTimeMinutes);
+    setCookTimeMinutes(parsed.cookTimeMinutes);
+    setCategoriesInput(parsed.categories && parsed.categories.length > 0 ? parsed.categories.join(', ') : 'Dinners');
+    setTagsInput(parsed.tags ? parsed.tags.join(', ') : '');
+    setIngredientsText((parsed.ingredients || []).map(i => i.raw).join('\n'));
+    setInstructionsText((parsed.instructions || []).map(i => i.text).join('\n\n'));
+
+    const noIngredients = !parsed.ingredients || parsed.ingredients.length === 0;
+    const noSteps = !parsed.instructions || parsed.instructions.length === 0;
+    if (noIngredients && noSteps) {
+      setImportNotice("We found the title and photo, but couldn't find the ingredients or steps. They may be in the original post's comments or on the website. Paste them below, or use the Instagram/Text tab.");
+    } else if (noSteps) {
+      setImportNotice("Imported! This post lists ingredients but no cooking steps, so add the directions below. Any tips from the post are in the description.");
+    } else if (noIngredients) {
+      setImportNotice('Imported! No ingredient list was found, so please check the ingredients below.');
+    } else {
+      setImportNotice('');
     }
     setActiveTab('manual');
   };
@@ -118,10 +126,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setScrapeError('');
 
     try {
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-      const res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error('Could not fetch URL content');
-      const html = await res.text();
+      const html = await fetchPageHtml(targetUrl);
 
       const parsed = parseRecipeFromHtml(html, targetUrl);
       if (parsed) {
@@ -175,11 +180,14 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   // 3. Instagram / Text Parser
   const handleParseText = () => {
     if (!pastedText.trim()) return;
-    const parsed = parseRawRecipeText(pastedText, pastedTitle);
+    const { creator, ...parsed } = parseRawRecipeText(pastedText, pastedTitle);
     setSourceType('instagram');
-    if (!sourceName) setSourceName('Instagram Post');
-    if (instagramUrl && !sourceUrl) setSourceUrl(instagramUrl);
-    applyParsedRecipe(parsed);
+    applyParsedRecipe({
+      ...parsed,
+      sourceName: sourceName || (creator ? `@${creator}` : 'Instagram Post'),
+      sourceUrl: sourceUrl || instagramUrl.trim() || undefined,
+      coverImage: coverImage || undefined
+    });
   };
 
   // 3. Cookbook OCR
@@ -201,8 +209,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         setOcrProgress(p);
       });
       setSourceType('cookbook');
-      if (!sourceName) setSourceName('Cookbook Recipe');
-      applyParsedRecipe(parsedRecipe);
+      applyParsedRecipe({ ...parsedRecipe, sourceName: sourceName || 'Cookbook Recipe' });
     } catch (err) {
       console.error(err);
       alert('OCR failed to read text from this image. Try a clearer shot with good lighting!');
@@ -592,7 +599,13 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
           {/* TAB 4: MANUAL REVIEW & FULL EDIT */}
           {activeTab === 'manual' && (
             <form onSubmit={handleSubmitFinal} className="space-y-5">
-              
+
+              {importNotice && (
+                <div className="p-3.5 bg-amber-50 text-amber-900 text-xs rounded-2xl border border-amber-200 leading-relaxed">
+                  {importNotice}
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-[#665D52] mb-1">

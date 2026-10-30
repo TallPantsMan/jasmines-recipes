@@ -3,6 +3,7 @@ import type { Recipe } from '../types/recipe';
 /** Downscale + re-encode an image data URL so it stays small enough to persist. */
 export function compressImageDataUrl(dataUrl: string, maxWidth = 900, quality = 0.8): Promise<string> {
   return new Promise((resolve) => {
+    if (typeof Image === 'undefined') return resolve(dataUrl);
     const img = new Image();
     img.onload = () => {
       try {
@@ -36,6 +37,15 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
  * persistent data URL. Tries our serverless endpoint first, then a public proxy.
  */
 export async function fetchInstagramCover(targetUrl: string, apiImage?: string): Promise<string | undefined> {
+  // A missing cover must never lose the recipe, so any failure here just means "no cover"
+  try {
+    return await fetchInstagramCoverUnsafe(targetUrl, apiImage);
+  } catch {
+    return undefined;
+  }
+}
+
+async function fetchInstagramCoverUnsafe(targetUrl: string, apiImage?: string): Promise<string | undefined> {
   if (apiImage && apiImage.startsWith('data:image')) {
     const c = await compressImageDataUrl(apiImage);
     if (c) return c;

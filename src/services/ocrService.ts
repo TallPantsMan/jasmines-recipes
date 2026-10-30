@@ -26,9 +26,8 @@ export async function processCookbookImage(
 
   await worker.terminate();
 
-  const parsed = parseRawRecipeText(text);
+  const parsed = parseRawRecipeText(text, undefined, { source: 'cookbook' });
   parsed.sourceType = 'cookbook';
-  parsed.categories = ['Cookbooks'];
 
   return {
     rawText: text,

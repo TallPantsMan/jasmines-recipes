@@ -1,77 +1,54 @@
-/**
- * Converts Instagram embed HTML or rich text into clean plain text with preserved line breaks.
- */
-export function cleanHtmlCaption(rawHtml: string): string {
-  return rawHtml
-    .replace(/<br\s*[\/]?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<\/li>/gi, '\n')
-    .replace(/<li[^>]*>/gi, '• ')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .trim();
-}
-
-/**
- * Splits raw instruction prose or multi-sentence directions into clean line-break separated steps,
- * preserving culinary abbreviations (tbsp., tsp., min., oz., lb., approx., etc.).
- */
-export function splitInstructionIntoSteps(text: string): string[] {
-  const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-  const result: string[] = [];
-
-  for (const rawLine of rawLines) {
-    const clean = rawLine
-      .replace(/^(?:step\s*\d+[:.)\-]?|\d+[.)]|[1-9]️⃣|🔟)\s*/i, '')
-      .replace(/(\s*#[A-Za-z0-9_]+)+\s*$/, '')
-      .trim();
-    if (!clean) continue;
-
-    // Short instruction or single sentence: keep intact
-    if (clean.length < 80) {
-      result.push(clean);
-      continue;
-    }
-
-    // Protect common abbreviations from splitting
-    const safeText = clean
-      .replace(/\b(tbsp|tsp|min|mins|sec|secs|hr|hrs|oz|lb|lbs|approx|deg|temp|vs|e\.g|i\.e)\./gi, '$1__DOT__');
-
-    // Split on period or exclamation mark followed by whitespace and capital letter or number
-    const parts = safeText.split(/(?<=[.!?])\s+(?=[A-Z0-9])/);
-    if (parts.length > 1) {
-      for (const part of parts) {
-        const restored = part.replace(/__DOT__/g, '.').trim();
-        if (restored) result.push(restored);
-      }
-    } else {
-      result.push(clean);
-    }
-  }
-
-  return result;
-}
-
 import type { Recipe, Ingredient, InstructionStep } from '../types/recipe';
-import { inferIngredientsFromSteps } from './ingredientInference';
+import { parseRawRecipeText, inferCategories } from './captionParser';
 import { fetchInstagramCover } from './imageService';
+import { fetchPageHtml } from './pageFetcher';
 
 /**
- * Converts ISO 8601 duration like "PT25M" or "PT1H15M" into minutes
+ * Converts a recipe duration into minutes. Handles ISO 8601 ("PT25M", "PT1H15M", "PT01H15M",
+ * "P0Y0M0DT0H20M0.000S"), plain text ("20 minutes", "1 hr 30 min") and {minValue,maxValue} objects.
  */
-function parseDuration(durationStr?: string): number | undefined {
-  if (!durationStr || typeof durationStr !== 'string') return undefined;
-  const match = durationStr.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-  if (!match) return undefined;
-  const hours = parseInt(match[1] || '0', 10);
-  const mins = parseInt(match[2] || '0', 10);
-  return hours * 60 + mins || undefined;
+function parseDuration(value?: any): number | undefined {
+  if (value == null) return undefined;
+  if (Array.isArray(value)) return parseDuration(value[0]);
+  if (typeof value === 'object') return parseDuration(value.minValue ?? value.value ?? value.maxValue);
+  if (typeof value === 'number') return value > 0 ? Math.round(value) : undefined;
+  const s = String(value).trim();
+  if (!s) return undefined;
+
+  let minutes = 0;
+  const iso = s.match(/^P(?:\d+Y)?(?:\d+M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:[\d.]+S)?)?$/i);
+  if (iso) {
+    const [, w, d, h, m] = iso;
+    minutes = Number(w || 0) * 7 * 1440 + Number(d || 0) * 1440 + Number(h || 0) * 60 + Number(m || 0);
+  } else {
+    const h = s.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i);
+    const m = s.match(/(\d+)\s*(?:minutes?|mins?|m)\b/i);
+    minutes = (h ? Math.round(parseFloat(h[1]) * 60) : 0) + (m ? parseInt(m[1], 10) : 0);
+  }
+  return minutes > 0 ? minutes : undefined;
+}
+
+/**
+ * Works out how many servings a recipe makes from schema.org recipeYield, which sites send as
+ * "4", 4, ["48", "4 dozen cookies"], "Makes 12", "6 to 8 servings" or "2 potpies (8 servings each)".
+ */
+function parseServings(yieldField: any): number {
+  const parts = (Array.isArray(yieldField) ? yieldField : [yieldField])
+    .filter((v) => v != null)
+    .map((v) => String(v));
+  const valid = (n: number) => n >= 1 && n < 100;
+
+  for (const part of parts) {
+    const m =
+      part.match(/(\d+)(?:\s*(?:-|–|—|to)\s*\d+)?\s*(?:servings?|people|persons?|portions?|pax)\b/i) ||
+      part.match(/\bserves\s+(\d+)/i);
+    if (m && valid(Number(m[1]))) return Number(m[1]);
+  }
+  for (const part of parts) {
+    const m = part.match(/\d+/);
+    if (m && valid(Number(m[0]))) return Number(m[0]);
+  }
+  return 4;
 }
 
 /**
@@ -80,23 +57,105 @@ function parseDuration(durationStr?: string): number | undefined {
 function extractImage(imageField: any): string | undefined {
   if (!imageField) return undefined;
   if (typeof imageField === 'string') return imageField;
-  if (Array.isArray(imageField) && imageField.length > 0) {
-    return typeof imageField[0] === 'string' ? imageField[0] : imageField[0]?.url;
+  if (Array.isArray(imageField)) {
+    for (const item of imageField) {
+      const found = extractImage(item);
+      if (found) return found;
+    }
+    return undefined;
   }
-  if (typeof imageField === 'object' && imageField.url) {
-    return imageField.url;
-  }
+  if (typeof imageField === 'object') return imageField.url || imageField.contentUrl || undefined;
   return undefined;
 }
 
 /**
- * Cleans HTML tags from text
+ * Turns HTML (or text with entities such as &frac12; and &amp;) into clean plain text.
+ * Uses DOMParser, which never runs scripts or loads images, unlike setting innerHTML on a live element.
  */
 function stripHtml(html: string): string {
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  return tmp.textContent || tmp.innerText || '';
+  const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html');
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
 }
+
+/** schema.org fields like keywords / recipeCategory arrive as a string, a comma list, or an array */
+function toList(value: any): string[] {
+  const items = Array.isArray(value) ? value : value == null ? [] : [value];
+  return items
+    .flatMap((v) => (typeof v === 'string' ? v.split(',') : v?.name ? [String(v.name)] : []))
+    .map((s) => stripHtml(s))
+    .filter(Boolean);
+}
+
+function authorNames(author: any): string[] {
+  const items = Array.isArray(author) ? author : author ? [author] : [];
+  return items.map((a) => (typeof a === 'string' ? a : a?.name)).filter((n): n is string => !!n).map((n) => n.toLowerCase());
+}
+
+const JUNK_TAGS = /^(publisher-tested|web|recipes?|food|cook the book|skills|how to .*)$/i;
+
+function buildTags(opts: { cuisine: string[]; categories: string[]; keywords: string[]; authors: string[]; title: string }): string[] {
+  const tags: string[] = [];
+  const titleLower = opts.title.toLowerCase();
+  [...opts.cuisine, ...opts.categories, ...opts.keywords].forEach((raw) => {
+    const t = raw.toLowerCase().replace(/^#/, '').trim();
+    if (!t || t.length < 3 || t.length > 28) return;
+    if (JUNK_TAGS.test(t) || opts.authors.includes(t) || t === titleLower) return;
+    if (!tags.includes(t)) tags.push(t);
+  });
+  return tags.slice(0, 8);
+}
+
+/** Collects instruction text from the many shapes schema.org allows (strings, HowToStep, HowToSection, nested lists) */
+function collectInstructionTexts(node: any, out: string[]): void {
+  if (!node) return;
+  if (Array.isArray(node)) {
+    node.forEach((n) => collectInstructionTexts(n, out));
+    return;
+  }
+  if (typeof node === 'string') {
+    String(node)
+      .replace(/<\/(?:p|li|div)>|<br\s*\/?>/gi, '\n')
+      .split(/\r?\n/)
+      .map((l) => stripHtml(l))
+      .filter(Boolean)
+      .forEach((l) => out.push(l));
+    return;
+  }
+  if (typeof node === 'object') {
+    if (Array.isArray(node.itemListElement)) collectInstructionTexts(node.itemListElement, out);
+    else if (node.text) collectInstructionTexts(String(node.text), out);
+    else if (node.name) collectInstructionTexts(String(node.name), out);
+  }
+}
+
+/** Steps that carry no cooking information ("Gather all ingredients.", "Enjoy!") */
+const FILLER_STEP = /^(?:(?:gather|get out|collect|assemble)\b[^.!]{0,40}\bingredients[.!\s]*|enjoy[.!\s]*|bon app[eé]tit[.!\s]*)$/i;
+
+/** Fallback for older sites that mark up recipes with microdata instead of JSON-LD */
+function parseMicrodataRecipe(doc: Document): { name?: string; ingredients: string[]; steps: string[] } | null {
+  const scope = doc.querySelector('[itemtype*="schema.org/Recipe" i]');
+  if (!scope) return null;
+  const text = (el: Element) => (el.textContent || '').replace(/\s+/g, ' ').trim();
+  const ingredients = Array.from(scope.querySelectorAll('[itemprop="recipeIngredient"], [itemprop="ingredients"]')).map(text).filter(Boolean);
+  const steps: string[] = [];
+  scope.querySelectorAll('[itemprop="recipeInstructions"]').forEach((el) => {
+    const items = el.querySelectorAll('li, p');
+    if (items.length > 0) items.forEach((li) => { const t = text(li); if (t) steps.push(t); });
+    else (el.textContent || '').split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean).forEach((l) => steps.push(l));
+  });
+  const name = scope.querySelector('[itemprop="name"]');
+  if (ingredients.length === 0 && steps.length === 0) return null;
+  return { name: name ? text(name) : undefined, ingredients, steps };
+}
+
+const asAbsoluteUrl = (maybeUrl: string | undefined, base: string): string | undefined => {
+  if (!maybeUrl) return undefined;
+  try {
+    return new URL(maybeUrl, base).href;
+  } catch {
+    return maybeUrl;
+  }
+};
 
 /**
  * Parses JSON-LD schema objects for Recipe definition
@@ -106,118 +165,108 @@ export function parseRecipeFromHtml(html: string, sourceUrl: string): Partial<Re
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
-    // 1. Try finding JSON-LD
+    let domain = '';
+    try {
+      domain = new URL(sourceUrl).hostname.replace(/^www\./, '');
+    } catch {
+      domain = 'Web Recipe';
+    }
+
+    const isRecipe = (item: any) =>
+      item && (item['@type'] === 'Recipe' || (Array.isArray(item['@type']) && item['@type'].includes('Recipe')));
+    const findRecipe = (json: any): any => {
+      if (!json) return null;
+      if (Array.isArray(json)) {
+        for (const item of json) {
+          const found = findRecipe(item);
+          if (found) return found;
+        }
+        return null;
+      }
+      if (isRecipe(json)) return json;
+      if (json['@graph']) return findRecipe(json['@graph']);
+      return null;
+    };
+
+    // 1. Try finding JSON-LD (single object, array, or @graph)
     const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let recipeData: any = null;
-
-    for (let i = 0; i < jsonLdScripts.length; i++) {
+    for (let i = 0; i < jsonLdScripts.length && !recipeData; i++) {
       try {
         const content = jsonLdScripts[i].textContent;
-        if (!content) continue;
-        const json = JSON.parse(content);
-
-        // Can be a single object, an array, or a @graph
-        if (json['@type'] === 'Recipe' || (Array.isArray(json['@type']) && json['@type'].includes('Recipe'))) {
-          recipeData = json;
-          break;
-        } else if (Array.isArray(json)) {
-          const found = json.find((item: any) => item['@type'] === 'Recipe' || (Array.isArray(item['@type']) && item['@type'].includes('Recipe')));
-          if (found) { recipeData = found; break; }
-        } else if (json['@graph'] && Array.isArray(json['@graph'])) {
-          const found = json['@graph'].find((item: any) => item['@type'] === 'Recipe' || (Array.isArray(item['@type']) && item['@type'].includes('Recipe')));
-          if (found) { recipeData = found; break; }
-        }
+        if (content) recipeData = findRecipe(JSON.parse(content));
       } catch {
         // continue
       }
     }
 
+    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || undefined;
+
     if (recipeData) {
-      // Ingredients
-      const rawIngredients: string[] = Array.isArray(recipeData.recipeIngredient)
-        ? recipeData.recipeIngredient
-        : [];
-      
-      const ingredients: Ingredient[] = rawIngredients.map((raw, idx) => ({
-        id: `ing-${Date.now()}-${idx}`,
-        raw: stripHtml(String(raw).trim())
-      })).filter(i => i.raw.length > 0);
+      const ingredients: Ingredient[] = (Array.isArray(recipeData.recipeIngredient) ? recipeData.recipeIngredient : [])
+        .map((raw: any, idx: number) => ({
+          id: `ing-${Date.now()}-${idx}`,
+          raw: stripHtml(typeof raw === 'string' ? raw : raw?.name || raw?.text || '')
+        }))
+        .filter((i: Ingredient) => i.raw.length > 0);
 
-      // Instructions
-      let rawInstructions: string[] = [];
-      if (Array.isArray(recipeData.recipeInstructions)) {
-        recipeData.recipeInstructions.forEach((inst: any) => {
-          if (typeof inst === 'string') {
-            rawInstructions.push(inst);
-          } else if (inst['@type'] === 'HowToStep' && inst.text) {
-            rawInstructions.push(inst.text);
-          } else if (inst['@type'] === 'HowToSection' && Array.isArray(inst.itemListElement)) {
-            inst.itemListElement.forEach((sub: any) => {
-              if (sub.text) rawInstructions.push(sub.text);
-              else if (typeof sub === 'string') rawInstructions.push(sub);
-            });
-          }
-        });
-      } else if (typeof recipeData.recipeInstructions === 'string') {
-        rawInstructions = recipeData.recipeInstructions.split(/\r?\n/).filter((l: string) => l.trim().length > 0);
-      }
+      const stepTexts: string[] = [];
+      collectInstructionTexts(recipeData.recipeInstructions, stepTexts);
+      const instructions: InstructionStep[] = stepTexts
+        .filter((t) => !FILLER_STEP.test(t))
+        .map((text, idx) => ({
+          id: `step-${Date.now()}-${idx}`,
+          stepNumber: idx + 1,
+          text
+        }));
 
-      const instructions: InstructionStep[] = rawInstructions.map((text, idx) => ({
-        id: `step-${Date.now()}-${idx}`,
-        stepNumber: idx + 1,
-        text: stripHtml(text.trim())
-      })).filter(s => s.text.length > 0);
+      const title = stripHtml(recipeData.name || doc.title || 'Untitled Recipe');
+      const cuisine = toList(recipeData.recipeCuisine);
+      const categoryList = toList(recipeData.recipeCategory);
+      const keywords = toList(recipeData.keywords);
 
-      let servings = 4;
-      if (recipeData.recipeYield) {
-        const yieldVal = Array.isArray(recipeData.recipeYield) ? recipeData.recipeYield[0] : recipeData.recipeYield;
-        const parsedYield = parseInt(String(yieldVal).replace(/\D+/g, ''), 10);
-        if (!isNaN(parsedYield) && parsedYield > 0 && parsedYield < 100) {
-          servings = parsedYield;
-        }
-      }
-
-      // Source domain
-      let domain = '';
-      try {
-        domain = new URL(sourceUrl).hostname.replace('www.', '');
-      } catch {
-        domain = 'Web Recipe';
-      }
+      let prep = parseDuration(recipeData.prepTime);
+      let cook = parseDuration(recipeData.cookTime);
+      const total = parseDuration(recipeData.totalTime);
+      if (!prep && !cook && total) cook = total;
 
       return {
-        title: stripHtml(recipeData.name || doc.title || 'Untitled Recipe'),
+        title,
         description: stripHtml(recipeData.description || ''),
         sourceType: 'website',
         sourceUrl,
-        sourceName: recipeData.author?.name || domain,
-        coverImage: extractImage(recipeData.image),
-        servings,
-        prepTimeMinutes: parseDuration(recipeData.prepTime),
-        cookTimeMinutes: parseDuration(recipeData.cookTime),
+        sourceName: domain,
+        coverImage: asAbsoluteUrl(extractImage(recipeData.image) || ogImage, sourceUrl),
+        servings: parseServings(recipeData.recipeYield),
+        prepTimeMinutes: prep,
+        cookTimeMinutes: cook,
         ingredients,
         instructions,
-        categories: ['Dinners'],
-        tags: []
+        categories: inferCategories({ title, categories: categoryList, keywords }),
+        tags: buildTags({ cuisine, categories: categoryList, keywords, authors: authorNames(recipeData.author), title })
       };
     }
 
-    // Fallback: OpenGraph tags
+    // 2. Older sites: schema.org microdata
+    const micro = parseMicrodataRecipe(doc);
     const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content');
-    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content');
     const ogDesc = doc.querySelector('meta[property="og:description"]')?.getAttribute('content');
+    const title = stripHtml(micro?.name || ogTitle || doc.title || 'Imported Recipe');
 
+    // 3. Last resort: OpenGraph tags only (title, picture, blurb) - no ingredients or steps found
     return {
-      title: ogTitle || doc.title || 'Imported Recipe',
-      description: ogDesc || '',
+      title,
+      description: ogDesc ? stripHtml(ogDesc) : '',
       sourceType: 'website',
       sourceUrl,
-      sourceName: new URL(sourceUrl).hostname.replace('www.', ''),
-      coverImage: ogImage || undefined,
+      sourceName: domain,
+      coverImage: asAbsoluteUrl(ogImage, sourceUrl),
       servings: 4,
-      ingredients: [],
-      instructions: [],
-      categories: ['Dinners'],
+      ingredients: (micro?.ingredients || []).map((raw, idx) => ({ id: `ing-${Date.now()}-${idx}`, raw })),
+      instructions: (micro?.steps || [])
+        .filter((t) => !FILLER_STEP.test(t))
+        .map((text, idx) => ({ id: `step-${Date.now()}-${idx}`, stepNumber: idx + 1, text })),
+      categories: inferCategories({ title }),
       tags: []
     };
   } catch (err) {
@@ -226,192 +275,7 @@ export function parseRecipeFromHtml(html: string, sourceUrl: string): Partial<Re
   }
 }
 
-/**
- * Intelligently parse raw pasted text (e.g., from an Instagram reel caption or cookbook text)
- */
-export function parseRawRecipeText(text: string, titleHint?: string): Partial<Recipe> {
-  // Pre-normalize text to handle inline section keywords or collapsed line breaks
-  const preprocessed = cleanHtmlCaption(text)
-    .replace(/\r\n/g, '\n')
-    .replace(/\s*\b(ingredients|what you need|shopping list|grocery list|you'll need|for the sauce|for the marinade)[\s:]+/gi, '\nIngredients:\n')
-    .replace(/\s*\b(instructions|directions|method|how to make|steps|preparation|how to|process)[\s:]+/gi, '\nInstructions:\n')
-    .replace(/\s*\b(step\s*\d+[:.)\-]?)\s+/gi, '\n$1 ')
-    .replace(/\s*([1-9]️⃣|🔟)\s*/g, '\n$1 ')
-    .replace(/(?:^|\s+)(\d+[\.\)])\s+/g, '\n$1 ');
-
-  const lines = preprocessed.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-  
-  let title = titleHint || '';
-  let description = '';
-  const ingredients: Ingredient[] = [];
-  const instructions: InstructionStep[] = [];
-  const tags: string[] = [];
-
-  type SectionType = 'header' | 'ingredients' | 'instructions' | 'notes';
-  let currentSection: SectionType = 'header';
-  let detectedTitle = false;
-
-  const ingredientKeywords = /^(?:[✨👉👇•\*\-#\s]*)\b(ingredients|what you need|shopping list|grocery list|you'll need|for the sauce|for the marinade)\b[\s:]*$/i;
-  const instructionKeywords = /^(?:[✨👉👇•\*\-#\s]*)\b(instructions|directions|method|how to make|steps|preparation|how to|process)\b[\s:]*$/i;
-  const notesKeywords = /^(?:[✨👉👇•\*\-#\s]*)\b(notes|jasmine's notes|tips|variations)\b[\s:]*$/i;
-  const isHashtagLine = (l: string) => /^(#[A-Za-z0-9_]+\s*)+$/.test(l) || (l.startsWith('#') && (l.match(/#/g) || []).length >= 2);
-  const isSocialPromoLine = (l: string) => /^(follow\s+@|subscribe|link in bio|save this for later|tap link|share with a friend)/i.test(l);
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Extract hashtags into tags
-    if (line.includes('#')) {
-      const foundTags = line.match(/#([A-Za-z0-9_]+)/g);
-      if (foundTags) {
-        foundTags.forEach(t => {
-          const cleanTag = t.replace('#', '').toLowerCase();
-          if (cleanTag.length > 2 && !['fyp', 'foryou', 'reels', 'viral', 'explore', 'explorepage'].includes(cleanTag)) {
-            if (!tags.includes(cleanTag)) tags.push(cleanTag);
-          }
-        });
-      }
-    }
-
-    // Skip promo lines or hashtag-only lines from instructions/ingredients
-    if (isHashtagLine(line) || isSocialPromoLine(line)) {
-      continue;
-    }
-
-    // Check section transitions
-    if (ingredientKeywords.test(line)) {
-      currentSection = 'ingredients';
-      continue;
-    }
-    if (instructionKeywords.test(line)) {
-      currentSection = 'instructions';
-      continue;
-    }
-    if (notesKeywords.test(line)) {
-      currentSection = 'notes';
-      continue;
-    }
-
-    // Auto-detect title from first line if not already set
-    if (!detectedTitle && !title && currentSection === 'header') {
-      if (line.length < 90 && !line.match(/^\d+[\.\)]/) && !line.includes('http')) {
-        title = line.replace(/^[#\*\-✨👉👇•\s]+/, '').replace(/[\s✨👉👇]+$/, '');
-        detectedTitle = true;
-        continue;
-      }
-    }
-
-    if (currentSection === 'header') {
-      // A numbered line like "1. Melt the butter" is a direction, not an ingredient
-      if (/^(?:step\s*\d+[:.)\-]?|\d+[.)]|[1-9]️⃣|🔟)\s+[A-Za-z]/i.test(line)) {
-        currentSection = 'instructions';
-        const stepTexts = splitInstructionIntoSteps(line);
-        for (const st of stepTexts) {
-          instructions.push({
-            id: `step-${Date.now()}-${instructions.length}`,
-            stepNumber: instructions.length + 1,
-            text: st
-          });
-        }
-        continue;
-      }
-      // Check if line looks like an ingredient (starts with amount/bullet)
-      if (/^(\d|½|¼|¾|⅓|⅔|\-|\*|•)/.test(line) && line.length < 100) {
-        currentSection = 'ingredients';
-        const rawItems = line.includes('•') ? line.split(/\s*•\s*/) : [line];
-        rawItems.forEach(item => {
-          if (item.trim()) {
-            ingredients.push({
-              id: `ing-${Date.now()}-${ingredients.length}`,
-              raw: item.trim().replace(/^[\-\*•]\s*/, '')
-            });
-          }
-        });
-      } else {
-        description += (description ? ' ' : '') + line;
-      }
-    } else if (currentSection === 'ingredients') {
-      // Check if line suddenly looks like an instruction
-      if (/^(?:step\s*\d+[:.)\-]?|\d+[.)]|[1-9]️⃣|🔟)\s+/i.test(line)) {
-        currentSection = 'instructions';
-        const stepTexts = splitInstructionIntoSteps(line);
-        for (const st of stepTexts) {
-          instructions.push({
-            id: `step-${Date.now()}-${instructions.length}`,
-            stepNumber: instructions.length + 1,
-            text: st
-          });
-        }
-      } else {
-        const rawItems = line.includes('•') ? line.split(/\s*•\s*/) : [line];
-        rawItems.forEach(item => {
-          if (item.trim()) {
-            ingredients.push({
-              id: `ing-${Date.now()}-${ingredients.length}`,
-              raw: item.trim().replace(/^[\-\*•]\s*/, '')
-            });
-          }
-        });
-      }
-    } else if (currentSection === 'instructions') {
-      const stepTexts = splitInstructionIntoSteps(line);
-      for (const st of stepTexts) {
-        instructions.push({
-          id: `step-${Date.now()}-${instructions.length}`,
-          stepNumber: instructions.length + 1,
-          text: st
-        });
-      }
-    }
-  }
-
-  // If no sections were marked explicitly, heuristic split
-  if (ingredients.length === 0 && instructions.length === 0 && lines.length > 0) {
-    lines.forEach((l) => {
-      if (isHashtagLine(l) || isSocialPromoLine(l)) return;
-      if (/^(\d|½|¼|¾|⅓|⅔|\-|\*|•)/.test(l)) {
-        ingredients.push({
-          id: `ing-${Date.now()}-${ingredients.length}`,
-          raw: l.replace(/^[\-\*•]\s*/, '')
-        });
-      } else {
-        const stepTexts = splitInstructionIntoSteps(l);
-        for (const st of stepTexts) {
-          instructions.push({
-            id: `step-${Date.now()}-${instructions.length}`,
-            stepNumber: instructions.length + 1,
-            text: st
-          });
-        }
-      }
-    });
-  }
-
-  // Captions often omit an ingredient list: infer one from the directions
-  if (ingredients.length < 2) {
-    const sourceSteps = instructions.length > 0 ? instructions.map(s => s.text) : [description];
-    const inferred = inferIngredientsFromSteps(sourceSteps);
-    const existing = new Set(ingredients.map(i => i.raw.toLowerCase()));
-    inferred.forEach((raw) => {
-      if (!existing.has(raw.toLowerCase())) {
-        ingredients.push({
-          id: `ing-${Date.now()}-${ingredients.length}`,
-          raw
-        });
-      }
-    });
-  }
-
-  return {
-    title: title || 'Instagram Recipe',
-    description: description.slice(0, 200),
-    ingredients,
-    instructions,
-    servings: 4,
-    categories: ['Dinners', 'Instagram'],
-    tags
-  };
-}
+export { parseRawRecipeText } from './captionParser';
 
 export interface InstagramFetchResult {
   success: boolean;
@@ -422,117 +286,87 @@ export interface InstagramFetchResult {
   error?: string;
 }
 
+/** Reads the caption and poster out of an Instagram /embed/captioned/ page (used when our own server route is unavailable) */
+function captionFromEmbedHtml(html: string): { caption: string; username: string } {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const el = doc.querySelector('.Caption');
+  if (!el) return { caption: '', username: '' };
+  const username = (el.querySelector('.CaptionUsername')?.textContent || '').trim().replace(/^@/, '');
+  el.querySelectorAll('.CaptionUsername, .CaptionComments').forEach((n) => n.remove());
+  el.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+  return { caption: (el.textContent || '').trim(), username };
+}
+
 /**
  * Extracts a recipe from an Instagram link by pulling its caption
  */
 export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promise<InstagramFetchResult> {
   const trimmed = inputUrlOrText.trim();
 
-  // 1. Extract Instagram URL if present
-  const urlMatch = trimmed.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[A-Za-z0-9_.-]+\/)?(?:p|reel|reels|share\/reel)\/([A-Za-z0-9_-]+)\/?(?:\?[^\s]*)?/i);
-  const targetUrl = urlMatch ? urlMatch[0] : (trimmed.startsWith('http') ? trimmed.split(/\s+/)[0] : '');
+  // 1. Extract the Instagram URL (tracking parameters and all) if present
+  const urlMatch = trimmed.match(/https?:\/\/(?:www\.)?instagram\.com\/[^\s]+/i);
+  const targetUrl = urlMatch
+    ? urlMatch[0].replace(/[)\].,;!]+$/, '')
+    : trimmed.startsWith('http') ? trimmed.split(/\s+/)[0] : '';
 
-  // Check if user pasted a link with caption together in the same text
-  let remainingText = targetUrl ? trimmed.replace(targetUrl, '').trim() : '';
-  // If newlines were collapsed, insert breaks before common keywords
-  if (remainingText) {
-    remainingText = remainingText
-      .replace(/\s*(ingredients|what you need|you'll need)[\s:]+/gi, '\nIngredients:\n')
-      .replace(/\s*(instructions|directions|method|how to make|steps)[\s:]+/gi, '\nInstructions:\n')
-      .replace(/(\d+[\.\)])\s+/g, '\n$1 ');
-  }
-
-  // Extract handle if available
+  // Handle from the link itself (instagram.com/feelgoodfoodie/reel/...), used only if the page doesn't name the poster
   const userMatch = targetUrl.match(/instagram\.com\/([A-Za-z0-9_.-]+)\/(?:reel|p)\//);
-  const authorName = userMatch && !['p', 'reel', 'reels', 'share'].includes(userMatch[1])
-    ? `@${userMatch[1]} on Instagram`
-    : 'Instagram Reel';
+  const urlHandle = userMatch && !['p', 'reel', 'reels', 'share', 'tv'].includes(userMatch[1]) ? `@${userMatch[1]}` : '';
 
-  // If caption was already pasted along with the URL in the text
-  if (remainingText.length > 25) {
-    const parsed = parseRawRecipeText(remainingText);
-    const pastedCover = targetUrl ? await fetchInstagramCover(targetUrl) : undefined;
+  const buildResult = (caption: string, handle: string, cover: string | undefined): InstagramFetchResult => {
+    const { creator, ...parsed } = parseRawRecipeText(caption, undefined, { source: 'instagram' });
+    const poster = handle || urlHandle;
+    const credited = creator && poster && creator.toLowerCase() !== poster.replace(/^@/, '').toLowerCase() ? `@${creator}` : '';
+    const sourceName = credited ? `${credited} via ${poster}` : poster || (creator ? `@${creator}` : 'Instagram Reel');
     return {
       success: true,
       recipe: {
         ...parsed,
-        coverImage: pastedCover,
+        coverImage: cover,
         sourceType: 'instagram',
-        sourceUrl: targetUrl || inputUrlOrText,
-        sourceName: authorName,
-        categories: ['Dinners', 'Instagram']
+        sourceUrl: targetUrl,
+        sourceName
       },
-      caption: remainingText,
-      sourceUrl: targetUrl || inputUrlOrText,
-      authorName
+      caption,
+      sourceUrl: targetUrl,
+      authorName: poster || 'Instagram Reel'
     };
+  };
+
+  // 2. A caption pasted together with the link: parse the pasted text as-is
+  const pasted = targetUrl ? trimmed.replace(urlMatch ? urlMatch[0] : targetUrl, '').trim() : '';
+  if (pasted.length > 25) {
+    const cover = await fetchInstagramCover(targetUrl);
+    return buildResult(pasted, urlHandle, cover);
   }
 
   if (!targetUrl) {
     throw new Error('Please enter a valid Instagram post or reel link');
   }
 
-  // 2. Query serverless endpoint /api/instagram
+  // 3. Our serverless endpoint /api/instagram
   try {
     const apiRes = await fetch(`/api/instagram?url=${encodeURIComponent(targetUrl)}`);
     if (apiRes.ok) {
       const data = await apiRes.json();
       if (data.caption && data.caption.length > 10) {
-        const parsed = parseRawRecipeText(data.caption);
-        const apiCover = await fetchInstagramCover(targetUrl, data.image);
-        return {
-          success: true,
-          recipe: {
-            ...parsed,
-            coverImage: apiCover,
-            sourceType: 'instagram',
-            sourceUrl: targetUrl,
-            sourceName: data.authorName || authorName,
-            categories: ['Dinners', 'Instagram']
-          },
-          caption: data.caption,
-          sourceUrl: targetUrl,
-          authorName: data.authorName || authorName
-        };
+        const cover = await fetchInstagramCover(targetUrl, data.image);
+        return buildResult(data.caption, data.username ? `@${data.username}` : data.authorName !== 'Instagram Reel' ? data.authorName || '' : '', cover);
       }
     }
   } catch {
     // Continue to proxy fallback
   }
 
-  // 3. Fallback to public CORS proxies
+  // 4. Fallback to public CORS proxies
   try {
-    const match = targetUrl.match(/\/(?:p|reel|reels|share\/reel)\/([A-Za-z0-9_-]+)/);
-    const shortcode = match ? match[1] : '';
-    if (shortcode) {
-      const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(embedUrl)}`;
-      const res = await fetch(proxyUrl);
-      if (res.ok) {
-        const json = await res.json();
-        const html = json.contents || '';
-        const captionMatch = html.match(/class="Caption"[^>]*>([\s\S]*?)<\/div>/i);
-        if (captionMatch) {
-          const caption = cleanHtmlCaption(captionMatch[1]);
-          if (caption.length > 10) {
-            const parsed = parseRawRecipeText(caption);
-            const proxyCover = await fetchInstagramCover(targetUrl);
-            return {
-              success: true,
-              recipe: {
-                ...parsed,
-                coverImage: proxyCover,
-                sourceType: 'instagram',
-                sourceUrl: targetUrl,
-                sourceName: authorName,
-                categories: ['Dinners', 'Instagram']
-              },
-              caption,
-              sourceUrl: targetUrl,
-              authorName
-            };
-          }
-        }
+    const match = targetUrl.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
+    if (match) {
+      const html = await fetchPageHtml(`https://www.instagram.com/p/${match[1]}/embed/captioned/`);
+      const { caption, username } = captionFromEmbedHtml(html);
+      if (caption.length > 10) {
+        const cover = await fetchInstagramCover(targetUrl);
+        return buildResult(caption, username ? `@${username}` : '', cover);
       }
     }
   } catch {
@@ -542,7 +376,7 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
   return {
     success: false,
     sourceUrl: targetUrl,
-    authorName,
+    authorName: urlHandle || 'Instagram Reel',
     error: 'Instagram requires verification for this specific link. You can paste the copied caption text below to format in 1 click!'
   };
 }

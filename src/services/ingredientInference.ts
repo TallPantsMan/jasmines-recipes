@@ -16,7 +16,7 @@ const NUM = '(?:\\d+\\s+\\d\\/\\d|\\d+\\/\\d|\\d+(?:\\.\\d+)?(?:\\s*-\\s*\\d+(?:
 const VAGUE = '(?:a (?:little|bit of|splash of|drizzle of|handful of|pinch of|dash of|knob of|good)|a|an|some)';
 
 // Words that end an ingredient phrase when scanning a step.
-const STOP = /\b(?:and|or|plus|with|to|until|till|for|in|into|on|onto|over|then|while|when|so|using|about|at|per|before|after|if|as|from|inside|toss|stir|mix|cook|sear|add|sprinkle|melt|drizzle|whisk|blend|bake|roast|fry|simmer|serve|top)\b/i;
+const STOP = /\b(?:and|or|plus|with|to|until|till|for|in|into|on|onto|over|then|while|when|so|using|about|at|per|before|after|if|as|from|inside|that|which|who|toss|stir|mix|cook|sear|add|sprinkle|melt|drizzle|whisk|blend|bake|roast|fry|simmer|serve|top)\b/i;
 
 const FOOD_WORDS = new Set((
   'salt pepper garlic onion onions shallot shallots ginger butter oil olive vegetable canola sesame avocado coconut ' +
@@ -34,7 +34,7 @@ const FOOD_WORDS = new Set((
   'lemon lime orange apple apples banana bananas berries strawberries blueberries mango pineapple ' +
   'almonds walnuts pecans peanuts cashews pistachios seeds chia flax nuts raisins chocolate cocoa chips ' +
   'broth stock water wine beer juice zest dressing mirin sake oyster hoisin ' +
-  'seasoning spice spices herbs greens powder everything bagel taco ' +
+  'seasoning spice spices herbs greens powder bagel taco ' +
   'pickles olives capers anchovies dates'
 ).split(/\s+/));
 
@@ -64,6 +64,11 @@ const normalizeKey = (s: string) =>
     .trim()
     .replace(/(?:es|s)$/, '');
 
+const LEADING_AMOUNT = new RegExp(`^(?:about\\s+|around\\s+|roughly\\s+)?(?:${NUM}|${VAGUE})\\s*(?:(?:${UNITS})\\b\\.?\\s*)?(?:of\\s+)?`, 'i');
+
+/** What an ingredient line is "about": "1 tablespoon of cornstarch" and "3 tbsp cornstarch" both give "cornstarch" */
+export const ingredientKey = (raw: string): string => normalizeKey(raw.replace(/\([^)]*\)/g, ' ').replace(LEADING_AMOUNT, ''));
+
 const looksLikeFood = (phrase: string): boolean => {
   const words = phrase.toLowerCase().replace(/[^a-z\s'-]/g, ' ').split(/\s+/).filter(Boolean);
   if (words.length === 0 || words.length > 6) return false;
@@ -76,7 +81,7 @@ const trimPhrase = (phrase: string): string => {
   const cut = phrase.split(/[,;.!]|\s[-\u2013\u2014]\s|\(/)[0];
   const m = cut.match(STOP);
   const head = m && m.index !== undefined && m.index > 0 ? cut.slice(0, m.index) : cut;
-  return clean(head);
+  return clean(head).replace(/^worth of\s+/i, '');
 };
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
