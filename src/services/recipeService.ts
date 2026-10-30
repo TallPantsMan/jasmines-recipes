@@ -4,8 +4,11 @@ import type { Recipe, JasmineNote, Nutrition } from '../types/recipe';
 const LOCAL_STORAGE_KEY = 'jasmines_recipes_persistent_store_v2';
 const STORAGE_PERSISTED_KEY = 'jasmines_recipes_persisted_storage';
 
+// Set while a profile switch is wiping this device, so the app's save-on-exit can't write the old recipes back
+let mirrorFrozen = false;
+
 function saveToLocalStorage(recipes: Recipe[]): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || mirrorFrozen) return;
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(recipes));
   } catch {
@@ -375,6 +378,7 @@ export const RecipeService = {
 
   /** Empties this device's copy (used when someone else's profile is about to be opened). */
   async clearLocal(): Promise<void> {
+    mirrorFrozen = true;
     try {
       await db.recipes.clear();
     } catch {}
