@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe, JasmineNote } from '../types/recipe';
+import { formatMinutes } from '../utils/formatTime';
 import {
   X, Heart, Star, Play, Plus, Trash2, Edit3,
   ExternalLink, Camera, Check, Timer, MessageSquare, Bookmark
@@ -285,13 +286,13 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                   <div>
                     <div className="text-[10px] uppercase tracking-wider text-[#8A8072] font-bold">Prep</div>
                     <div className="text-xs sm:text-sm font-bold text-[#221E1B]">
-                      {recipe.prepTimeMinutes ? `${recipe.prepTimeMinutes}m` : '—'}
+                      {recipe.prepTimeMinutes ? formatMinutes(recipe.prepTimeMinutes) : '—'}
                     </div>
                   </div>
                   <div className="border-x border-[#F5EDE3]">
                     <div className="text-[10px] uppercase tracking-wider text-[#8A8072] font-bold">Cook</div>
                     <div className="text-xs sm:text-sm font-bold text-[#221E1B]">
-                      {recipe.cookTimeMinutes ? `${recipe.cookTimeMinutes}m` : '—'}
+                      {recipe.cookTimeMinutes ? formatMinutes(recipe.cookTimeMinutes) : '—'}
                     </div>
                   </div>
                   <div>
@@ -516,7 +517,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FFEFEA] hover:bg-[#FFD5C8] border border-[#FFD5C8] text-[#FF5B26] text-xs font-bold transition-all cursor-pointer"
                             >
                               <Timer className="w-3.5 h-3.5" />
-                              <span>Start {step.timerMinutes}m Timer</span>
+                              <span>Start {formatMinutes(step.timerMinutes)} Timer</span>
                             </button>
                           </div>
                         )}

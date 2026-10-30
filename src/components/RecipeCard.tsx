@@ -3,6 +3,7 @@ import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe } from '../types/recipe';
 import { Heart, Clock, BookOpen, Globe, MessageSquare, Star, Utensils, Bookmark, Send } from 'lucide-react';
 import { InstagramIcon } from './Icons';
+import { formatMinutes } from '../utils/formatTime';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -156,7 +157,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
             {totalTime > 0 && (
               <span className="flex items-center gap-1 font-bold text-[#3D372F]">
                 <Clock className="w-3.5 h-3.5 text-[#FF5B26]" />
-                {totalTime}m
+                {formatMinutes(totalTime)}
               </span>
             )}
             <span className="font-medium text-[#82786D]">{recipe.ingredients.length} items</span>
@@ -167,7 +168,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
                 onSend(recipe);
               }}
               className="flex items-center gap-1 font-bold text-[#FF5B26] hover:text-[#E84D1B] transition-colors cursor-pointer"
-              title="Send this recipe to Jasmine"
+              title="Send this recipe"
             >
               <Send className="w-3.5 h-3.5" />
               Send

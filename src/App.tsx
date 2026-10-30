@@ -266,7 +266,7 @@ export function App() {
     if (!hasShortCodeReady(recipe)) setToast('Getting the share code ready…');
     const outcome = await sendRecipe(recipe);
     setToast('');
-    reportShare(outcome, 'Recipe code copied. Paste it in a message to Jasmine.');
+    reportShare(outcome, 'Recipe code copied. Paste it into a message to send it.');
   };
 
   // Get short codes ready in the background so Send opens straight away

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Recipe } from '../types/recipe';
 import { X, ChevronLeft, ChevronRight, Check, ListFilter, Sun, Timer, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { formatMinutes } from '../utils/formatTime';
 
 interface CookModeModalProps {
   recipe: Recipe;
@@ -177,7 +178,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
             <div className="mt-6">
               <span className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs sm:text-sm">
                 <Timer className="w-4 h-4" />
-                <span>Timer suggested: {currentStep.timerMinutes} minutes</span>
+                <span>Timer suggested: {formatMinutes(currentStep.timerMinutes)}</span>
               </span>
             </div>
           )}

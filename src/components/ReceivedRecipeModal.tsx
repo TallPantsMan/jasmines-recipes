@@ -2,6 +2,7 @@
 import type { Recipe } from '../types/recipe';
 import { recipeImageSrc, generatedCover } from '../services/imageService';
 import { Check, Clock, X } from 'lucide-react';
+import { formatMinutes } from '../utils/formatTime';
 
 interface ReceivedRecipeModalProps {
   recipe: Recipe;
@@ -40,7 +41,7 @@ export const ReceivedRecipeModal: React.FC<ReceivedRecipeModalProps> = ({ recipe
           {recipe.description && <p className="text-sm text-[#61584D] leading-relaxed line-clamp-3">{recipe.description}</p>}
           <div className="flex items-center gap-4 text-xs font-semibold text-[#3D372F]">
             {totalTime > 0 && (
-              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-[#FF5B26]" />{totalTime}m</span>
+              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-[#FF5B26]" />{formatMinutes(totalTime)}</span>
             )}
             <span>{recipe.ingredients.length} ingredients</span>
             <span>{recipe.instructions.length} steps</span>

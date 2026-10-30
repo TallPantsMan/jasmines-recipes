@@ -437,7 +437,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                 </h3>
                 <p className="text-xs text-[#7A7165]">
                   Works with Instagram reels and posts, NYT Cooking, Half Baked Harvest, Allrecipes, and thousands more.
-                  Got a recipe sent from Alex? Paste the whole message here.
+                  Got a recipe sent to you? Paste the whole message here.
                 </p>
               </div>
 
