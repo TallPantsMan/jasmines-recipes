@@ -1,9 +1,27 @@
-import { requireLogin } from './_auth.js';
+﻿import { requireLogin } from './_auth.js';
 
 // Tidies a messy recipe (Instagram caption, pasted text, cookbook photo text) with Gemini's free tier.
 // The key lives only in the server's environment (GEMINI_API_KEY), never in the app.
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const MAX_INPUT = 12000;
+const API = 'https://generativelanguage.googleapis.com/v1beta';
+
+// Model names get retired, so when the configured one isn't found we ask Google which fast models exist
+// and use the newest. Remembered while this server instance stays warm.
+let discoveredModel = '';
+
+async function pickModel(key: string): Promise<string> {
+  const r = await fetch(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error(`Could not list AI models (${r.status})`);
+  const data: any = await r.json();
+  const candidates = (data.models || [])
+    .filter((m: any) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m: any) => String(m.name).replace(/^models\//, ''))
+    .filter((n: string) => /^gemini-[\d.]+-flash(-\d+)?$/.test(n));
+  const version = (n: string) => parseFloat(n.match(/^gemini-([\d.]+)/)?.[1] || '0');
+  candidates.sort((a: string, b: string) => version(b) - version(a));
+  if (!candidates[0]) throw new Error('No suitable AI model is available for this key');
+  return candidates[0];
+}
 
 const INSTRUCTIONS = `You turn messy recipe text (social media captions, pasted notes, text read from a cookbook photo) into a clean recipe.
 Rules:
@@ -53,16 +71,16 @@ export default async function handler(req: any, res: any) {
   const text = typeof body?.text === 'string' ? body.text.trim().slice(0, MAX_INPUT) : '';
   if (text.length < 20) return res.status(400).json({ error: 'Not enough text to work with' });
 
-  const generationConfig: Record<string, unknown> = {
-    responseMimeType: 'application/json',
-    responseSchema: SCHEMA,
-    temperature: 0.1,
-  };
-  // Skips the slow "thinking" phase on the 2.5 models; plain tidying doesn't need it
-  if (MODEL.includes('2.5')) generationConfig.thinkingConfig = { thinkingBudget: 0 };
 
-  try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+  const call = async (model: string) => {
+    const generationConfig: Record<string, unknown> = {
+      responseMimeType: 'application/json',
+      responseSchema: SCHEMA,
+      temperature: 0.1,
+    };
+    // Skips the slow "thinking" phase on the 2.5 models; plain tidying doesn't need it
+    if (model.includes('2.5')) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    return fetch(`${API}/models/${model}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
@@ -72,9 +90,18 @@ export default async function handler(req: any, res: any) {
       }),
       signal: AbortSignal.timeout(25000),
     });
+  };
+
+  try {
+    let r = await call(process.env.GEMINI_MODEL || discoveredModel || 'gemini-2.5-flash');
+    if (r.status === 404 && !process.env.GEMINI_MODEL) {
+      discoveredModel = await pickModel(key);
+      r = await call(discoveredModel);
+    }
     if (!r.ok) {
       // Includes "too many requests" on the free tier; the app falls back to its own parser
-      return res.status(502).json({ error: `AI service answered ${r.status}` });
+      const detail: any = await r.json().catch(() => ({}));
+      return res.status(502).json({ error: `AI service answered ${r.status}: ${String(detail?.error?.message || '').slice(0, 200)}` });
     }
     const data: any = await r.json();
     const out = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') || '';
