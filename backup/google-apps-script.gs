@@ -226,11 +226,11 @@ function formatAll() {
   var prof = profilesSheet();
   if (prof.getLastRow() > 2) {
     prof.getRange(2, 1, prof.getLastRow() - 1, prof.getLastColumn())
-      .sort([{ column: 1, ascending: true }, { column: 4, ascending: true }, { column: 5, ascending: true }]);
+      .sort([{ column: 1, ascending: true }, { column: 5, ascending: true }]); // deleted rows have no title, so they sink to the bottom
   }
   styleSheet(prof, [90, 120, 170, 70, 300, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80], [2, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
   prof.setTabColor('#FF5B26');
-  prof.getRange(1, 3, prof.getMaxRows(), 1).setFontColor('#6E6457');
+  prof.getRange(2, 3, prof.getMaxRows() - 1, 1).setFontColor('#6E6457');
   prof.setConditionalFormatRules([
     SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$D2="yes"')
       .setFontColor('#B5ADA1').setStrikethrough(true).setRanges([prof.getRange(2, 1, prof.getMaxRows() - 1, 5)]).build()

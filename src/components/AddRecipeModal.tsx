@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { notify } from '../services/dialog';
 import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../types/recipe';
-import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl, fetchVideoRecipeFromUrl, isVideoLink } from '../services/recipeParser';
+import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl, fetchVideoRecipeFromUrl, isVideoLink, pageTextFromHtml } from '../services/recipeParser';
 import { processCookbookImages, type OcrProgress } from '../services/ocrService';
 import { fileToCompressedDataUrl } from '../services/imageService';
 import { fetchPageHtml } from '../services/pageFetcher';
@@ -198,6 +198,26 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       const parsed = parseRecipeFromHtml(html, targetUrl);
       if (parsed) {
         setSourceType('website');
+        if (!parsed.ingredients?.length || !parsed.instructions?.length) {
+          // No recipe data behind the page: read its visible text instead
+          const pageText = pageTextFromHtml(html);
+          if (pageText) {
+            const fromText = parseRawRecipeText(pageText, parsed.title, { source: 'text' });
+            const { creator: _creator, ...refined } = await refineWithAi(pageText, fromText);
+            if (refined.ingredients?.length && refined.instructions?.length) {
+              applyParsedRecipe({
+                ...refined,
+                title: refined.title || parsed.title,
+                sourceType: 'website',
+                sourceUrl: targetUrl,
+                sourceName: parsed.sourceName,
+                coverImage: parsed.coverImage,
+              });
+              return;
+            }
+          }
+          throw new Error('No ingredients or steps found on page.');
+        }
         applyParsedRecipe(await refineParsedRecipe(parsed));
       } else {
         throw new Error('No structured recipe found on page.');

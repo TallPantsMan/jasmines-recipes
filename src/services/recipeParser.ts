@@ -277,6 +277,26 @@ export function parseRecipeFromHtml(html: string, sourceUrl: string): Partial<Re
   }
 }
 
+/**
+ * For pages with no recipe data behind the scenes (many small bakery/blog sites): the readable text of the page,
+ * starting a little before the "Ingredients" heading so the recipe survives the AI's length limit.
+ */
+export function pageTextFromHtml(html: string): string {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, style, noscript, svg, nav, header, footer, form, iframe, button').forEach((n) => n.remove());
+    doc.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+    doc.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, div, tr').forEach((n) => n.append('\n'));
+    const text = (doc.body?.textContent || '').replace(/[ \t ]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+    if (!/ingredients/i.test(text)) return '';
+    const at = text.search(/ingredients\s*:?\s*\n/i);
+    const start = at > 0 ? Math.max(0, at - 600) : 0;
+    return text.slice(start, start + 12000);
+  } catch {
+    return '';
+  }
+}
+
 export { parseRawRecipeText } from './captionParser';
 
 export interface InstagramFetchResult {
