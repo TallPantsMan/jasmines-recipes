@@ -155,12 +155,12 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
       <div className="bg-[#FDFBF7] w-full max-w-5xl h-[100dvh] sm:h-auto sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col sm:max-h-[94vh] border border-[#EFE7DE]">
         
         {/* ReciMe Styled Top Bar */}
-        <div style={{ paddingTop: 'max(1.25rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }} className="shrink-0 sticky top-0 z-20 bg-[#FDFBF7]/95 backdrop-blur-md px-4 sm:px-6 pb-3 border-b border-[#F0E8DC] flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div style={{ paddingTop: 'max(1.25rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }} className="shrink-0 sticky top-0 z-20 bg-[#FDFBF7]/95 backdrop-blur-md px-3 sm:px-6 pb-3 border-b border-[#F0E8DC] flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
             {/* Want to Try Bookmark Button */}
             <button
               onClick={(e) => onToggleWantToTry(e, recipe.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all cursor-pointer text-xs font-bold ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border transition-all cursor-pointer text-xs font-bold shrink-0 ${
                 recipe.wantToTry
                   ? 'bg-[#FF5B26] text-white border-[#FF5B26] shadow-sm'
                   : 'bg-white hover:bg-[#F8F2EB] text-[#5A5246] border-[#EFE7DE]'
@@ -174,7 +174,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
             {/* Favorite Heart Button */}
             <button
               onClick={(e) => onToggleFavorite(e, recipe.id)}
-              className={`p-2 rounded-full border transition-all cursor-pointer ${
+              className={`p-1.5 sm:p-2 rounded-full border transition-all cursor-pointer shrink-0 ${
                 recipe.favorite
                   ? 'bg-[#FFEFEA] text-[#FF5B26] border-[#FFCBBF] shadow-xs'
                   : 'bg-white hover:bg-gray-50 text-gray-400 border-gray-200'
@@ -185,7 +185,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
             </button>
 
             {/* Rating Stars */}
-            <div className="flex items-center gap-1 bg-white px-2.5 py-1.5 rounded-full border border-[#EFE7DE] shadow-xs">
+            <div className="flex items-center gap-0 sm:gap-1 bg-white px-1.5 sm:px-2.5 py-1.5 rounded-full border border-[#EFE7DE] shadow-xs shrink-0">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
@@ -198,13 +198,14 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               onClick={() => onEdit(recipe)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl bg-white hover:bg-[#F7F2EA] text-[#423B33] border border-[#E8DFC9] text-xs font-bold shadow-xs transition-all cursor-pointer"
+              title="Edit"
+              className="flex items-center gap-1.5 px-2.5 min-[400px]:px-3.5 py-1.5 rounded-2xl bg-white hover:bg-[#F7F2EA] text-[#423B33] border border-[#E8DFC9] text-xs font-bold shadow-xs transition-all cursor-pointer"
             >
               <Edit3 className="w-3.5 h-3.5 text-[#FF5B26]" />
-              <span>Edit</span>
+              <span className="hidden min-[400px]:inline">Edit</span>
             </button>
             <button
               onClick={async () => {
@@ -213,14 +214,15 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                   onClose();
                 }
               }}
-              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all cursor-pointer"
               title="Delete Recipe"
             >
               <Trash2 className="w-4 h-4" />
             </button>
             <button
               onClick={onClose}
-              className="p-2 bg-white hover:bg-gray-100 text-[#423B33] rounded-full border border-gray-200 shadow-xs transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 bg-white hover:bg-gray-100 text-[#423B33] rounded-full border border-gray-200 shadow-xs transition-all cursor-pointer"
+              title="Close"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
