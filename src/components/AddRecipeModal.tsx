@@ -65,7 +65,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     initialRecipe?.ingredients?.map(i => i.raw).join('\n') || ''
   );
   const [instructionsText, setInstructionsText] = useState(
-    initialRecipe?.instructions?.map(i => i.text).join('\n') || ''
+    initialRecipe?.instructions?.map(i => i.text).join('\n\n') || ''
   );
 
   const [initialJasmineNote, setInitialJasmineNote] = useState('');
@@ -91,7 +91,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       setIngredientsText(parsed.ingredients.map(i => i.raw).join('\n'));
     }
     if (parsed.instructions && parsed.instructions.length > 0) {
-      setInstructionsText(parsed.instructions.map(i => i.text).join('\n'));
+      setInstructionsText(parsed.instructions.map(i => i.text).join('\n\n'));
     }
     setActiveTab('manual');
   };

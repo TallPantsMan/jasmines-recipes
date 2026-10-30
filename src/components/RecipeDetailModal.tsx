@@ -505,7 +505,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         {step.stepNumber}
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs sm:text-sm text-[#2C2620] leading-relaxed font-medium">
+                        <p className="text-xs sm:text-sm text-[#2C2620] leading-relaxed font-medium whitespace-pre-line">
                           {step.text}
                         </p>
 
