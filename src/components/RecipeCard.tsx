@@ -156,9 +156,13 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
           <p className="text-[11px] text-[#A09587] mt-0.5 font-medium">Added by {importedBy}</p>
 
           {/* Description */}
-          {recipe.description && (
+          {recipe.description ? (
             <p className="text-xs text-[#61584D] mt-2 line-clamp-2 leading-relaxed">
               {recipe.description}
+            </p>
+          ) : (
+            <p className="text-xs text-[#A09587] mt-2 italic">
+              {recipe.ingredients.length} ingredients, {recipe.instructions.length} steps
             </p>
           )}
         </div>
@@ -192,7 +196,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
           <div className="flex items-center gap-2">
             {/* Jasmine Note Pill */}
             {recipe.jasmineNotes && recipe.jasmineNotes.length > 0 && (
-              <span className="flex items-center gap-1 text-[11px] font-bold text-[#FF5B26] bg-[#FFEFEA] px-2.5 py-0.5 rounded-full" title="Jasmine's Notes">
+              <span className="flex items-center gap-1 text-[11px] font-bold text-[#FF5B26] bg-[#FFEFEA] px-2.5 py-0.5 rounded-full" title="Notes">
                 <MessageSquare className="w-3 h-3 text-[#FF5B26]" />
                 <span>{recipe.jasmineNotes.length}</span>
               </span>

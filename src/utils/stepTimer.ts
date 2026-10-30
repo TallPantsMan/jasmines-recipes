@@ -30,26 +30,25 @@ function toMinutes(amount: number, unit: string): number {
 export function detectTimerMinutes(text: string): number | undefined {
   if (!text || !WAIT_WORDS.test(text)) return undefined;
 
+  // A step can mention several waits ("1-2 minutes before stirring, then fry for 3-4 minutes"): use the longest
+  const found: number[] = [];
+
   // "1 hour 15 minutes" / "1 hour and 30 mins"
-  const combo = new RegExp(`${NUMBER}\\s*(?:hours?|hrs?|h)\\b\\s*(?:and\\s*)?${NUMBER}\\s*(?:minutes?|mins?|m)\\b`, 'i').exec(text);
-  if (combo) {
-    const total = Math.round(toNumber(combo[1]) * 60 + toNumber(combo[2]));
-    if (total > 0) return total;
+  for (const m of text.matchAll(new RegExp(`${NUMBER}\\s*(?:hours?|hrs?|h)\\b\\s*(?:and\\s*)?${NUMBER}\\s*(?:minutes?|mins?|m)\\b`, 'gi'))) {
+    found.push(Math.round(toNumber(m[1]) * 60 + toNumber(m[2])));
   }
 
   // "10-15 minutes" or "10 to 15 minutes" -> use the longer one
-  const range = new RegExp(`${NUMBER}\\s*(?:-|–|to)\\s*${NUMBER}\\s*${UNIT}`, 'i').exec(text);
-  if (range) {
-    const total = Math.round(toMinutes(Math.max(toNumber(range[1]), toNumber(range[2])), range[3]));
-    if (total > 0) return total;
+  for (const m of text.matchAll(new RegExp(`${NUMBER}\\s*(?:-|–|to)\\s*${NUMBER}\\s*${UNIT}`, 'gi'))) {
+    found.push(Math.round(toMinutes(Math.max(toNumber(m[1]), toNumber(m[2])), m[3])));
   }
 
-  const single = new RegExp(`${NUMBER}\\s*${UNIT}`, 'i').exec(text);
-  if (single) {
-    const total = Math.round(toMinutes(toNumber(single[1]), single[2]));
-    if (total > 0 && total <= 24 * 60) return total;
+  for (const m of text.matchAll(new RegExp(`${NUMBER}\\s*${UNIT}`, 'gi'))) {
+    found.push(Math.round(toMinutes(toNumber(m[1]), m[2])));
   }
-  return undefined;
+
+  const best = Math.max(0, ...found.filter((n) => n > 0 && n <= 24 * 60));
+  return best > 0 ? best : undefined;
 }
 
 /** The timer for a step: the saved one if there is one, otherwise one found in the text. */

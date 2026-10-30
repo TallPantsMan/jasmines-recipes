@@ -99,6 +99,16 @@ export function App({ profile }: { profile: ProfileName }) {
     return () => clearTimeout(t);
   }, [recipes, isLoading]);
 
+  // Esc closes the recipe window (cook mode and the import window handle their own)
+  useEffect(() => {
+    if (!activeRecipe || cookModeState || isAddModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector('[role="alertdialog"], [role="dialog"][aria-modal="true"]')) setActiveRecipe(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeRecipe, cookModeState, isAddModalOpen]);
+
   const handleSwitchProfile = async () => {
     if (!(await askConfirm(`Switch to a different profile? Your recipes stay safe in ${profile}'s profile and come back when you pick ${profile} again.`, 'Switch'))) return;
     try {
@@ -161,7 +171,7 @@ export function App({ profile }: { profile: ProfileName }) {
       if (selectedCategory === 'Quick (<30m)') {
         const total = (recipe.prepTimeMinutes || 0) + (recipe.cookTimeMinutes || 0);
         const hasTag = recipe.categories.includes('Quick (<30m)') || recipe.tags.some(t => t.toLowerCase().includes('quick') || t.toLowerCase().includes('30'));
-        if (total > 30 && !hasTag) return false;
+        if (total >= 30 && !hasTag) return false;
       }
 
       // 2. Search Query Filter
@@ -599,6 +609,7 @@ export function App({ profile }: { profile: ProfileName }) {
         <RecipeDetailModal
           recipe={activeRecipe}
           importedBy={activeRecipe.importedBy || profile}
+          profile={profile}
           onSetImportedBy={handleSetImportedBy}
           onClose={() => setActiveRecipe(null)}
           onEdit={(r) => {

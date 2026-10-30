@@ -962,7 +962,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
               {!initialRecipe && (
                 <div className="bg-[#FFF8F5] p-3.5 rounded-2xl border border-[#FED7C7]">
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-[#FF5B26] mb-1">
-                    Jasmine's Notes / First Thoughts (Optional)
+                    My Notes / First Thoughts (Optional)
                   </label>
                   <input
                     type="text"

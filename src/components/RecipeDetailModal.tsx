@@ -15,6 +15,7 @@ import {
 interface RecipeDetailModalProps {
   recipe: Recipe;
   importedBy: string;
+  profile?: string;
   onSetImportedBy: (recipeId: string, name: string) => void;
   onClose: () => void;
   onEdit: (recipe: Recipe) => void;
@@ -35,6 +36,7 @@ interface RecipeDetailModalProps {
 export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   recipe,
   importedBy,
+  profile,
   onSetImportedBy,
   onClose,
   onEdit,
@@ -467,7 +469,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                       <MessageSquare className="w-4 h-4" />
                     </div>
                     <h3 className="font-serif text-base font-bold text-[#221E1B]">
-                      Jasmine's Notes
+                      {profile ? `${profile}'s Notes` : 'My Notes'}
                     </h3>
                   </div>
                   <span className="text-[11px] font-semibold text-[#FF5B26] bg-white px-2 py-0.5 rounded-full border border-[#FED7C7]">
