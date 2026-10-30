@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChefHat } from 'lucide-react';
-import { PROFILES, getProfile, setProfile, type ProfileName } from '../services/profile';
+import { PROFILES, PROFILE_COLORS, getProfile, setProfile, type ProfileName } from '../services/profile';
 
 /** Asks "who's cooking?" on a device that hasn't picked a profile yet, then shows the app for that person. */
 const ProfileGate: React.FC<{ children: (profile: ProfileName) => React.ReactNode }> = ({ children }) => {
@@ -25,8 +25,11 @@ const ProfileGate: React.FC<{ children: (profile: ProfileName) => React.ReactNod
             <button
               key={name}
               onClick={() => { setProfile(name); setChosen(name); }}
-              className="w-full py-4 rounded-2xl bg-white border border-[#EFE7DE] hover:border-[#FF5B26] hover:bg-[#FFF7F4] text-lg font-serif font-bold text-[#221E1B] shadow-xs active:scale-[0.98] transition-all cursor-pointer"
+              className="w-full py-3 px-4 rounded-2xl bg-white border border-[#EFE7DE] hover:border-[#FF5B26] hover:bg-[#FFF7F4] text-lg font-serif font-bold text-[#221E1B] shadow-xs active:scale-[0.98] transition-all cursor-pointer flex items-center gap-4"
             >
+              <span style={{ background: PROFILE_COLORS[name] }} className="w-10 h-10 rounded-full text-white flex items-center justify-center text-base font-bold shrink-0">
+                {name[0]}
+              </span>
               {name}
             </button>
           ))}

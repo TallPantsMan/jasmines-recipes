@@ -5,7 +5,16 @@ import confetti from 'canvas-confetti';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
 import { stepTimerMinutes } from '../utils/stepTimer';
+import { stepIngredients } from '../utils/stepIngredients';
 import { notify } from '../services/dialog';
+
+const TEXT_SIZES = [
+  'text-lg sm:text-2xl lg:text-3xl landscape:text-xl',
+  'text-xl sm:text-3xl lg:text-4xl landscape:text-2xl landscape:lg:text-4xl',
+  'text-2xl sm:text-4xl lg:text-5xl landscape:text-3xl landscape:lg:text-5xl',
+  'text-3xl sm:text-5xl lg:text-6xl landscape:text-4xl landscape:lg:text-6xl',
+];
+const TEXT_SIZE_KEY = 'jasmines_recipes_cook_text_size';
 
 interface CookModeModalProps {
   recipe: Recipe;
@@ -23,6 +32,23 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [timerSecs, setTimerSecs] = useState<number | null>(null);
+  const [textSize, setTextSize] = useState<number>(() => {
+    try {
+      const n = Number(localStorage.getItem(TEXT_SIZE_KEY));
+      return Number.isInteger(n) && n >= 0 && n < TEXT_SIZES.length ? n : 1;
+    } catch {
+      return 1;
+    }
+  });
+  const changeTextSize = (delta: number) => {
+    const next = Math.min(TEXT_SIZES.length - 1, Math.max(0, textSize + delta));
+    setTextSize(next);
+    try {
+      localStorage.setItem(TEXT_SIZE_KEY, String(next));
+    } catch {
+      /* the size just won't be remembered */
+    }
+  };
 
   // A timer belongs to one step, so moving to another step clears it
   useEffect(() => { setTimerSecs(null); }, [currentStepIndex]);
@@ -63,6 +89,9 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
   const totalSteps = recipe.instructions.length;
   const currentStep = recipe.instructions[currentStepIndex];
   const stepMinutes = currentStep ? stepTimerMinutes(currentStep) : undefined;
+  const stepIngs = currentStep
+    ? stepIngredients(currentStep.text, recipe.ingredients, initialServings / (recipe.servings || initialServings))
+    : [];
 
   const handleNext = () => {
     if (currentStepIndex < totalSteps - 1) {
@@ -136,12 +165,33 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
           {recipe.title}
         </div>
 
-        <button
-          onClick={onClose}
-          className="p-1.5 sm:p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
-        >
-          <X className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center rounded-full bg-white/10 text-white font-bold">
+            <button
+              onClick={() => changeTextSize(-1)}
+              disabled={textSize === 0}
+              title="Smaller text"
+              className="px-2.5 py-1 text-xs disabled:opacity-30 cursor-pointer"
+            >
+              A-
+            </button>
+            <button
+              onClick={() => changeTextSize(1)}
+              disabled={textSize === TEXT_SIZES.length - 1}
+              title="Bigger text"
+              className="px-2.5 py-1 text-base disabled:opacity-30 cursor-pointer"
+            >
+              A+
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            title="Close cook mode"
+            className="p-1.5 sm:p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+          >
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        </div>
       </header>
 
       {/* Main Body */}
@@ -188,9 +238,19 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
             <span>Step {currentStepIndex + 1} of {totalSteps}</span>
           </div>
 
-          <p className="font-serif text-xl sm:text-3xl lg:text-4xl landscape:text-2xl landscape:lg:text-4xl font-semibold leading-relaxed sm:leading-snug text-white/95 max-w-2xl whitespace-pre-line">
+          <p className={`font-serif font-semibold leading-relaxed sm:leading-snug text-white/95 max-w-2xl whitespace-pre-line ${TEXT_SIZES[textSize]}`}>
             {currentStep?.text}
           </p>
+
+          {stepIngs.length > 0 && (
+            <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-2xl">
+              {stepIngs.map((line, i) => (
+                <span key={i} className="text-sm sm:text-base font-semibold text-white/90 bg-white/10 border border-white/15 px-3.5 py-1.5 rounded-full">
+                  {line}
+                </span>
+              ))}
+            </div>
+          )}
 
           {stepMinutes && (
             <div className="mt-6">

@@ -3,7 +3,11 @@ import { fetchInstagramCover } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { signOut } from './services/auth';
-import { syncProfile, rememberDeletion } from './services/syncService';
+import { syncProfile, rememberDeletion, forgetDeletion } from './services/syncService';
+import { addToBin, listBin, removeFromBin, type BinItem } from './services/recycleBin';
+import { RecentlyDeletedModal } from './components/RecentlyDeletedModal';
+import { GroceryListModal } from './components/GroceryListModal';
+import { listGrocery } from './services/groceryList';
 import { estimateNutrition } from './services/nutritionService';
 import { setProfile, type ProfileName } from './services/profile';
 import { backupRecipe, backupAll, flushBackupQueue } from './services/backupService';
@@ -108,6 +112,14 @@ export function App({ profile }: { profile: ProfileName }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [activeRecipe, cookModeState, isAddModalOpen]);
+
+  // Recently deleted: a copy of deleted recipes kept on this device, with a quick Undo right after deleting
+  const [binItems, setBinItems] = useState<BinItem[]>(() => listBin(profile));
+  const [isBinOpen, setIsBinOpen] = useState(false);
+  const [isGroceryOpen, setIsGroceryOpen] = useState(false);
+  const [groceryCount, setGroceryCount] = useState(() => listGrocery(profile).filter(i => !i.checked).length);
+  const [undoItem, setUndoItem] = useState<BinItem | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSwitchProfile = async () => {
     if (!(await askConfirm(`Switch to a different profile? Your recipes stay safe in ${profile}'s profile and come back when you pick ${profile} again.`, 'Switch'))) return;
@@ -416,7 +428,23 @@ export function App({ profile }: { profile: ProfileName }) {
     }
   };
 
+  const handleRestoreRecipe = async (item: BinItem) => {
+    forgetDeletion(profile, item.recipe.id);
+    await handleSaveRecipe(item.recipe);
+    removeFromBin(profile, item.recipe.id);
+    setBinItems(listBin(profile));
+    setUndoItem(null);
+  };
+
   const handleDeleteRecipe = async (id: string) => {
+    const doomed = recipes.find(r => r.id === id);
+    if (doomed) {
+      addToBin(profile, doomed);
+      setBinItems(listBin(profile));
+      setUndoItem({ recipe: doomed, deletedAt: new Date().toISOString() });
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      undoTimer.current = setTimeout(() => setUndoItem(null), 8000);
+    }
     rememberDeletion(profile, id);
     await RecipeService.deleteRecipe(id);
     setRecipes(prev => prev.filter(r => r.id !== id));
@@ -579,12 +607,43 @@ export function App({ profile }: { profile: ProfileName }) {
               {syncState === 'syncing' ? 'Syncing…' : syncState === 'error' ? 'Not synced' : '✓ Synced'}
             </span>
             <span className="hidden sm:inline">•</span>
+            <button onClick={() => setIsGroceryOpen(true)} className="hover:text-[#FF5B26] transition-colors cursor-pointer">
+              Grocery list{groceryCount > 0 ? ` (${groceryCount})` : ''}
+            </button>
+            <span className="hidden sm:inline">•</span>
+            <button onClick={() => { setBinItems(listBin(profile)); setIsBinOpen(true); }} className="hover:text-[#FF5B26] transition-colors cursor-pointer">
+              Recently deleted{binItems.length > 0 ? ` (${binItems.length})` : ''}
+            </button>
+            <span className="hidden sm:inline">•</span>
             <button onClick={handleSwitchProfile} className="hover:text-[#FF5B26] transition-colors cursor-pointer">{profile}: switch</button>
             <span className="hidden sm:inline">•</span>
             <button onClick={signOut} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Sign out</button>
           </div>
         </div>
       </footer>
+
+      {isBinOpen && (
+        <RecentlyDeletedModal
+          items={binItems}
+          onRestore={async (item) => { await handleRestoreRecipe(item); }}
+          onClose={() => setIsBinOpen(false)}
+        />
+      )}
+
+      {isGroceryOpen && (
+        <GroceryListModal
+          profile={profile}
+          onClose={() => { setIsGroceryOpen(false); setGroceryCount(listGrocery(profile).filter(i => !i.checked).length); }}
+          onChange={() => setGroceryCount(listGrocery(profile).filter(i => !i.checked).length)}
+        />
+      )}
+
+      {undoItem && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-4 bg-[#221E1B] text-white text-sm font-semibold rounded-2xl px-4 py-3 shadow-2xl max-w-[92vw]">
+          <span className="truncate">Deleted "{undoItem.recipe.title}"</span>
+          <button onClick={() => handleRestoreRecipe(undoItem)} className="text-[#FF9A78] font-bold cursor-pointer shrink-0">Undo</button>
+        </div>
+      )}
 
       {incomingRecipe && (
         <ReceivedRecipeModal

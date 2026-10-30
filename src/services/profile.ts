@@ -3,6 +3,13 @@
 export const PROFILES = ['Jasmine', 'Leslie', 'Alex'] as const;
 export type ProfileName = (typeof PROFILES)[number];
 
+/** Each person's color, so it's obvious at a glance whose box is open */
+export const PROFILE_COLORS: Record<ProfileName, string> = {
+  Jasmine: '#E0457B',
+  Leslie: '#7C5CBF',
+  Alex: '#2F8F83',
+};
+
 const PROFILE_KEY = 'jasmines_recipes_profile';
 
 export function getProfile(): ProfileName | null {

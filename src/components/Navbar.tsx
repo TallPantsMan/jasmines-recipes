@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PROFILE_COLORS, type ProfileName } from '../services/profile';
 import { Plus, Search, Sparkles, Download, Upload, UtensilsCrossed, ChefHat, CheckCircle } from 'lucide-react';
 
 interface NavbarProps {
@@ -31,8 +32,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* ReciMe Styled Logo & Branding */}
         <div className="flex items-center justify-between w-full sm:w-auto">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#FF5B26] text-white flex items-center justify-center shadow-md shadow-[#FF5B26]/20 transition-transform active:scale-95 cursor-pointer" onClick={onShowWelcome} title="App Guide">
+            <div className="relative w-10 h-10 rounded-2xl bg-[#FF5B26] text-white flex items-center justify-center shadow-md shadow-[#FF5B26]/20 transition-transform active:scale-95 cursor-pointer" onClick={onShowWelcome} title="App Guide">
               <UtensilsCrossed className="w-5 h-5 stroke-[2.2]" />
+              <span
+                style={{ background: PROFILE_COLORS[profile as ProfileName] || '#8A8072' }}
+                className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full border-2 border-[#FDFBF7] text-[10px] font-bold flex items-center justify-center"
+                title={profile}
+              >
+                {profile[0]}
+              </span>
             </div>
             <div>
               <div className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">

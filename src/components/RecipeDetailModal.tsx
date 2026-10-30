@@ -4,6 +4,8 @@ import type { Recipe, JasmineNote } from '../types/recipe';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
 import { stepTimerMinutes } from '../utils/stepTimer';
+import { stepIngredients } from '../utils/stepIngredients';
+import { addToGrocery } from '../services/groceryList';
 import { nutritionBasis } from '../services/nutritionService';
 import { PROFILES } from '../services/profile';
 import { notify, askConfirm } from '../services/dialog';
@@ -592,6 +594,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                     </span>
                   </div>
 
+                  <div className="flex flex-col items-end gap-1.5">
                   {/* ReciMe Style Servings Stepper */}
                   <div className="flex items-center gap-2 bg-[#F8F2EA] px-3 py-1 rounded-full text-xs font-bold text-[#221E1B]">
                     <button
@@ -607,6 +610,19 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                     >
                       +
                     </button>
+                  </div>
+                  {profile && (
+                    <button
+                      onClick={() => {
+                        const factor = servings / (recipe.servings || servings);
+                        const added = addToGrocery(profile, recipe.title, recipe.ingredients.map((i) => scaleIngredient(i.raw, factor)));
+                        notify(added > 0 ? `Added ${added} ingredients to your grocery list.` : 'Those ingredients are already on your grocery list.');
+                      }}
+                      className="text-[11px] font-bold text-[#FF5B26] hover:underline cursor-pointer"
+                    >
+                      + Add to grocery list
+                    </button>
+                  )}
                   </div>
                 </div>
 
@@ -659,6 +675,16 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         <p className="text-xs sm:text-sm text-[#2C2620] leading-relaxed font-medium whitespace-pre-line">
                           {step.text}
                         </p>
+
+                        {stepIngredients(step.text, recipe.ingredients, servings / (recipe.servings || servings)).length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {stepIngredients(step.text, recipe.ingredients, servings / (recipe.servings || servings)).map((line, i) => (
+                              <span key={i} className="text-[11px] font-semibold text-[#786E62] bg-[#F7F2EC] px-2.5 py-0.5 rounded-full">
+                                {line}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                         {stepTimerMinutes(step) && (
                           <div className="mt-2.5">

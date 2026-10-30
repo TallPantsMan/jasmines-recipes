@@ -39,6 +39,14 @@ export function rememberDeletion(profile: string | null, id: string) {
   writeTombstones(profile, t);
 }
 
+/** Called when a deleted recipe is put back, so it is no longer treated as deleted. */
+export function forgetDeletion(profile: string | null, id: string) {
+  if (!profile) return;
+  const t = readTombstones(profile);
+  delete t[id];
+  writeTombstones(profile, t);
+}
+
 async function call(profile: ProfileName, payload: Record<string, unknown>): Promise<any> {
   const res = await apiFetch('/api/sync', {
     method: 'POST',
