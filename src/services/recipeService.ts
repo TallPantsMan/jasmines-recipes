@@ -329,6 +329,30 @@ export const RecipeService = {
     }
   },
 
+  /** Applies changes that came from the cloud copy, keeping their original edit times. */
+  async applyRemote(recipes: Recipe[], deleteIds: string[]): Promise<void> {
+    try {
+      if (recipes.length) await db.recipes.bulkPut(recipes);
+      if (deleteIds.length) await db.recipes.bulkDelete(deleteIds);
+    } catch (err) {
+      console.warn('IndexedDB apply failed:', err);
+    }
+    const byId = new Map((loadFromLocalStorage() || []).map(r => [r.id, r]));
+    recipes.forEach(r => byId.set(r.id, r));
+    deleteIds.forEach(id => byId.delete(id));
+    saveToLocalStorage(Array.from(byId.values()));
+  },
+
+  /** Empties this device's copy (used when someone else's profile is about to be opened). */
+  async clearLocal(): Promise<void> {
+    try {
+      await db.recipes.clear();
+    } catch {}
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+    } catch {}
+  },
+
   async exportAllAsJson(): Promise<string> {
     const all = await this.getAllRecipes();
     return JSON.stringify(all, null, 2);

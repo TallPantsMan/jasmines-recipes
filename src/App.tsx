@@ -3,6 +3,8 @@ import { fetchInstagramCover } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { signOut } from './services/auth';
+import { syncProfile, rememberDeletion } from './services/syncService';
+import { setProfile, type ProfileName } from './services/profile';
 import { backupRecipe, backupAll, flushBackupQueue } from './services/backupService';
 import {
   sendRecipe, shareApp, recipeFromCode, hasShortCodeReady, prepareShortCodes, type ShareOutcome
@@ -19,7 +21,7 @@ import { AddRecipeModal } from './components/AddRecipeModal';
 import { WelcomeModal } from './components/WelcomeModal';
 import { Plus, UtensilsCrossed } from 'lucide-react';
 
-export function App() {
+export function App({ profile }: { profile: ProfileName }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('All');
@@ -59,6 +61,54 @@ export function App() {
     }
     loadData();
   }, []);
+
+  // Profile sync: the cloud copy of this person's recipes and this device's copy are kept the same
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle');
+  const runSync = async () => {
+    setSyncState('syncing');
+    try {
+      const { changed } = await syncProfile(profile);
+      if (changed) {
+        const fresh = await RecipeService.getAllRecipes();
+        setRecipes(fresh);
+        setActiveRecipe(prev => (prev ? fresh.find(r => r.id === prev.id) || null : prev));
+      }
+      setSyncState('ok');
+    } catch (err) {
+      console.warn('Sync failed:', err);
+      setSyncState('error');
+    }
+  };
+  const runSyncRef = useRef(runSync);
+  runSyncRef.current = runSync;
+
+  // Once the box has opened, and again whenever the app comes back into view
+  useEffect(() => {
+    if (isLoading) return;
+    runSyncRef.current();
+    const onVisible = () => { if (document.visibilityState === 'visible') runSyncRef.current(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [isLoading]);
+
+  // A few seconds after any change on this device, send it to the cloud copy
+  useEffect(() => {
+    if (isLoading) return;
+    const t = setTimeout(() => runSyncRef.current(), 4000);
+    return () => clearTimeout(t);
+  }, [recipes, isLoading]);
+
+  const handleSwitchProfile = async () => {
+    if (!(await askConfirm(`Switch to a different profile? Your recipes stay safe in ${profile}'s profile and come back when you pick ${profile} again.`, 'Switch'))) return;
+    try {
+      await syncProfile(profile);
+    } catch {
+      if (!(await askConfirm("Couldn't save your latest changes to the cloud (no connection?). Anything not yet synced on this device will be lost if you switch now. Switch anyway?", 'Switch anyway'))) return;
+    }
+    await RecipeService.clearLocal();
+    setProfile(null);
+    window.location.reload();
+  };
 
   // Backfill: Instagram recipes whose cover is missing/expired get the post's cover saved permanently
   const coverBackfillTried = useRef<Set<string>>(new Set());
@@ -339,6 +389,7 @@ export function App() {
   };
 
   const handleDeleteRecipe = async (id: string) => {
+    rememberDeletion(profile, id);
     await RecipeService.deleteRecipe(id);
     setRecipes(prev => prev.filter(r => r.id !== id));
     if (activeRecipe && activeRecipe.id === id) {
@@ -493,6 +544,12 @@ export function App() {
             >
               {backupStatus || 'Back up now'}
             </button>
+            <span className="hidden sm:inline">•</span>
+            <span title={syncState === 'error' ? "Couldn't reach the cloud copy. Changes will sync when you're back online." : 'Your recipes are saved to your profile'}>
+              {syncState === 'syncing' ? 'Syncing…' : syncState === 'error' ? 'Not synced' : '✓ Synced'}
+            </span>
+            <span className="hidden sm:inline">•</span>
+            <button onClick={handleSwitchProfile} className="hover:text-[#FF5B26] transition-colors cursor-pointer">{profile}: switch</button>
             <span className="hidden sm:inline">•</span>
             <button onClick={signOut} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Sign out</button>
           </div>
