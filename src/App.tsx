@@ -7,7 +7,7 @@ import { backupRecipe, backupAll, flushBackupQueue } from './services/backupServ
 import {
   sendRecipe, shareApp, recipeFromCode, hasShortCodeReady, prepareShortCodes, type ShareOutcome
 } from './services/shareService';
-import { notify } from './services/dialog';
+import { notify, askConfirm } from './services/dialog';
 import { DialogHost } from './components/DialogHost';
 import { ReceivedRecipeModal } from './components/ReceivedRecipeModal';
 import { Navbar } from './components/Navbar';
@@ -23,6 +23,7 @@ export function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('All');
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [backupStatus, setBackupStatus] = useState('');
   const [toast, setToast] = useState('');
@@ -98,6 +99,7 @@ export function App() {
   const filteredRecipes = useMemo(() => {
     return recipes.filter((recipe) => {
       // 1. Category Filter
+      if (selectedFolder && !recipe.folders?.includes(selectedFolder)) return false;
       if (selectedCategory === 'Want to Try' && !recipe.wantToTry) return false;
       if (selectedCategory === 'Favorites' && !recipe.favorite) return false;
       if (selectedCategory === 'Instagram' && recipe.sourceType !== 'instagram' && !recipe.categories.includes('Instagram')) return false;
@@ -123,7 +125,33 @@ export function App() {
 
       return inTitle || inDesc || inSource || inTags || inIngredients || inNotes;
     });
-  }, [recipes, selectedCategory, searchQuery]);
+  }, [recipes, selectedCategory, selectedFolder, searchQuery]);
+
+  // Every folder name in use, A to Z
+  const folderNames = useMemo(() => {
+    const names = new Set<string>();
+    recipes.forEach(r => r.folders?.forEach(f => names.add(f)));
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [recipes]);
+
+  // If the folder being viewed no longer has any recipes, go back to everything
+  useEffect(() => {
+    if (selectedFolder && !folderNames.includes(selectedFolder)) setSelectedFolder(null);
+  }, [folderNames, selectedFolder]);
+
+  const handleSetFolders = async (id: string, folders: string[]) => {
+    await RecipeService.setFolders(id, folders);
+    setRecipes(prev => prev.map(r => r.id === id ? { ...r, folders } : r));
+    setActiveRecipe(prev => (prev && prev.id === id ? { ...prev, folders } : prev));
+  };
+
+  const handleDeleteFolder = async (name: string) => {
+    if (!(await askConfirm(`Delete the folder "${name}"? The recipes inside stay in your box, they just leave this folder.`, 'Delete folder'))) return;
+    for (const r of recipes) {
+      if (r.folders?.includes(name)) await handleSetFolders(r.id, r.folders.filter(f => f !== name));
+    }
+    setSelectedFolder(null);
+  };
 
   // Favorites and Want to Try counts
   const favoritesCount = useMemo(() => {
@@ -374,7 +402,11 @@ export function App() {
       {/* ReciMe Pill Categories */}
       <CategoryFilterBar
         selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
+        onSelectCategory={(cat) => { setSelectedCategory(cat); setSelectedFolder(null); }}
+        folders={folderNames}
+        selectedFolder={selectedFolder}
+        onSelectFolder={(f) => { setSelectedFolder(f); setSelectedCategory('All'); }}
+        onDeleteFolder={handleDeleteFolder}
         favoritesCount={favoritesCount}
         wantToTryCount={wantToTryCount}
       />
@@ -502,6 +534,8 @@ export function App() {
           onDeleteNote={handleDeleteNote}
           onAddPhoto={handleAddPhoto}
           onRemovePhoto={handleRemovePhoto}
+          allFolders={folderNames}
+          onSetFolders={handleSetFolders}
           onStartCooking={(r, s) => {
             setCookModeState({ recipe: r, servings: s });
           }}

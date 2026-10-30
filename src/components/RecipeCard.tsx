@@ -1,7 +1,7 @@
 import React from 'react';
 import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe } from '../types/recipe';
-import { Heart, Clock, BookOpen, Globe, MessageSquare, Star, Utensils, Bookmark, Send } from 'lucide-react';
+import { Heart, Clock, BookOpen, Globe, MessageSquare, Star, Utensils, Bookmark, Send, Play } from 'lucide-react';
 import { InstagramIcon } from './Icons';
 import { formatMinutes } from '../utils/formatTime';
 
@@ -27,6 +27,13 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-white/95 text-[#E1306C] shadow-sm backdrop-blur-md">
             <InstagramIcon className="w-3 h-3" />
             <span>Instagram</span>
+          </span>
+        );
+      case 'video':
+        return (
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-white/95 text-sky-700 shadow-sm backdrop-blur-md">
+            <Play className="w-3 h-3" />
+            <span>Video</span>
           </span>
         );
       case 'cookbook':

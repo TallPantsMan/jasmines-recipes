@@ -1,7 +1,7 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { notify } from '../services/dialog';
 import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../types/recipe';
-import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl } from '../services/recipeParser';
+import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl, fetchVideoRecipeFromUrl, isVideoLink } from '../services/recipeParser';
 import { processCookbookImages, type OcrProgress } from '../services/ocrService';
 import { fileToCompressedDataUrl } from '../services/imageService';
 import { fetchPageHtml } from '../services/pageFetcher';
@@ -31,11 +31,29 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const getInitialTab = (): IntakeTab => {
     if (!initialRecipe) return 'website';
     if (initialRecipe.sourceType === 'cookbook') return 'cookbook';
-    if (initialRecipe.sourceType === 'website' || initialRecipe.sourceType === 'instagram') return 'website';
+    if (initialRecipe.sourceType === 'website' || initialRecipe.sourceType === 'instagram' || initialRecipe.sourceType === 'video') return 'website';
     return 'manual';
   };
 
   const [activeTab, setActiveTab] = useState<IntakeTab>(getInitialTab());
+
+  // Clipboard hint: if the last thing copied looks like a recipe link or a recipe code, offer to import it
+  const [clipboardHint, setClipboardHint] = useState('');
+  useEffect(() => {
+    if (initialRecipe) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const text = (await navigator.clipboard.readText()).trim();
+        if (cancelled || !text || text.length > 4000) return;
+        const isLink = /^(https?:\/\/)?(www\.)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(text);
+        if (isLink || looksLikeRecipeCode(text)) setClipboardHint(text);
+      } catch {
+        // The phone or browser didn't allow looking at the clipboard; that's fine, no hint then
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [initialRecipe]);
 
   // Intake State
   const [urlInput, setUrlInput] = useState('');
@@ -116,19 +134,23 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   };
 
   // 1. Web Scraper
-  const handleScrapeUrl = async (e: React.FormEvent) => {
+  const handleScrapeUrl = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!urlInput.trim()) return;
+    return runImport(urlInput);
+  };
+
+  const runImport = async (rawInput: string) => {
+    if (!rawInput.trim()) return;
 
     // A recipe sent from the other person's app: hand it over to be previewed and saved
-    if (looksLikeRecipeCode(urlInput)) {
+    if (looksLikeRecipeCode(rawInput)) {
       setScrapeError('');
-      if (onPasteRecipeCode && (await onPasteRecipeCode(urlInput))) onClose();
+      if (onPasteRecipeCode && (await onPasteRecipeCode(rawInput))) onClose();
       else setScrapeError("That recipe code didn't work. Ask for it to be sent again, and make sure you pasted the whole message.");
       return;
     }
 
-    let targetUrl = urlInput.trim();
+    let targetUrl = rawInput.trim();
     if (!targetUrl.startsWith('http')) {
       targetUrl = 'https://' + targetUrl;
     }
@@ -138,6 +160,31 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       setScrapeError('');
       setInstagramUrl(targetUrl);
       handlePullInstagram(targetUrl);
+      return;
+    }
+
+    // TikTok and YouTube links: read the video's caption or description
+    if (isVideoLink(targetUrl)) {
+      setScrapeError('');
+      setInstagramUrl(targetUrl);
+      setIsPullingInstagram(true);
+      setInstagramError(null);
+      setShowManualCaptionFallback(false);
+      try {
+        const result = await fetchVideoRecipeFromUrl(targetUrl);
+        if (result.success && result.recipe) {
+          setSourceType('video');
+          applyParsedRecipe(result.recipe);
+        } else {
+          setInstagramError(result.error || "Couldn't read this video. Paste its caption below.");
+          setShowManualCaptionFallback(true);
+        }
+      } catch (err: any) {
+        setInstagramError(err.message || "Couldn't read this video. Paste its caption below.");
+        setShowManualCaptionFallback(true);
+      } finally {
+        setIsPullingInstagram(false);
+      }
       return;
     }
 
@@ -358,6 +405,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       rating: initialRecipe?.rating || 0,
       favorite: initialRecipe?.favorite || false,
       wantToTry,
+      folders: initialRecipe?.folders,
       createdAt: initialRecipe?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -445,10 +493,24 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                   Paste a Recipe Link or Text
                 </h3>
                 <p className="text-xs text-[#7A7165]">
-                  Works with Instagram reels and posts, NYT Cooking, Half Baked Harvest, Allrecipes, and thousands more.
+                  Works with Instagram, TikTok and YouTube videos, NYT Cooking, Half Baked Harvest, Allrecipes, and thousands more.
                   Got a recipe sent to you? Paste the whole message here.
                 </p>
               </div>
+
+              {clipboardHint && !urlInput && (
+                <button
+                  type="button"
+                  onClick={() => { setUrlInput(clipboardHint); const t = clipboardHint; setClipboardHint(''); runImport(t); }}
+                  className="w-full text-left p-3.5 rounded-2xl bg-[#FFEFEA] border border-[#FFD5C8] text-xs text-[#C2410C] font-semibold flex items-center gap-2.5 cursor-pointer hover:bg-[#FFE4DA] transition-all"
+                >
+                  <Sparkles className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0">
+                    Looks like you copied a recipe link. Tap to import it:
+                    <span className="block truncate font-normal text-[#7A7165]">{clipboardHint}</span>
+                  </span>
+                </button>
+              )}
 
               <form onSubmit={handleScrapeUrl} className="space-y-3">
                 <input

@@ -3,10 +3,11 @@ import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe, JasmineNote } from '../types/recipe';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
+import { stepTimerMinutes } from '../utils/stepTimer';
 import { notify, askConfirm } from '../services/dialog';
 import {
   X, Heart, Star, Play, Plus, Trash2, Edit3,
-  ExternalLink, Camera, Check, Timer, MessageSquare, Bookmark
+  ExternalLink, Camera, Check, Timer, MessageSquare, Bookmark, FolderOpen
 } from 'lucide-react';
 
 interface RecipeDetailModalProps {
@@ -21,6 +22,8 @@ interface RecipeDetailModalProps {
   onDeleteNote: (recipeId: string, noteId: string) => void;
   onAddPhoto: (recipeId: string, dataUrl: string) => void;
   onRemovePhoto: (recipeId: string, index: number) => void;
+  allFolders: string[];
+  onSetFolders: (recipeId: string, folders: string[]) => void;
   onStartCooking: (recipe: Recipe, servings: number) => void;
 }
 
@@ -36,8 +39,11 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   onDeleteNote,
   onAddPhoto,
   onRemovePhoto,
+  allFolders,
+  onSetFolders,
   onStartCooking
 }) => {
+  const [newFolderName, setNewFolderName] = useState('');
   const [servings, setServings] = useState<number>(recipe.servings || 4);
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
   const [newNoteText, setNewNoteText] = useState('');
@@ -283,6 +289,58 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                   </p>
                 )}
 
+                {/* Cookbook folders */}
+                <div className="mt-4 p-3 bg-white rounded-2xl border border-[#EFE7DE] space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#221E1B]">
+                    <FolderOpen className="w-3.5 h-3.5 text-[#FF5B26]" />
+                    <span>Folders</span>
+                  </div>
+                  {allFolders.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {allFolders.map((f) => {
+                        const inFolder = (recipe.folders || []).includes(f);
+                        return (
+                          <button
+                            key={f}
+                            onClick={() => onSetFolders(recipe.id, inFolder ? (recipe.folders || []).filter((x) => x !== f) : [...(recipe.folders || []), f])}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                              inFolder ? 'bg-[#2C2620] text-white border-[#2C2620]' : 'bg-white text-[#5A5246] border-[#EFE7DE] hover:bg-[#F8F2EB]'
+                            }`}
+                          >
+                            {inFolder ? '✓ ' : ''}{f}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const name = newFolderName.trim();
+                      if (!name) return;
+                      const existing = allFolders.find((f) => f.toLowerCase() === name.toLowerCase()) || name;
+                      if (!(recipe.folders || []).includes(existing)) onSetFolders(recipe.id, [...(recipe.folders || []), existing]);
+                      setNewFolderName('');
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      maxLength={30}
+                      placeholder={allFolders.length ? 'New folder, e.g. Holidays' : 'Make a folder, e.g. Holidays'}
+                      className="flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-[#E8DFC9] bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[#FF5B26]/20 focus:border-[#FF5B26] text-[#221E1B]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newFolderName.trim()}
+                      className="px-3 py-1.5 rounded-xl bg-[#FF5B26] disabled:opacity-40 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </form>
+                </div>
+
                 {/* Quick Info Grid */}
                 <div className="mt-4 grid grid-cols-3 gap-2 p-3 bg-white rounded-2xl border border-[#EFE7DE] text-center shadow-xs">
                   <div>
@@ -512,14 +570,14 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                           {step.text}
                         </p>
 
-                        {step.timerMinutes && (
+                        {stepTimerMinutes(step) && (
                           <div className="mt-2.5">
                             <button
-                              onClick={() => startTimer(step.timerMinutes!)}
+                              onClick={() => startTimer(stepTimerMinutes(step)!)}
                               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FFEFEA] hover:bg-[#FFD5C8] border border-[#FFD5C8] text-[#FF5B26] text-xs font-bold transition-all cursor-pointer"
                             >
                               <Timer className="w-3.5 h-3.5" />
-                              <span>Start {formatMinutes(step.timerMinutes)} Timer</span>
+                              <span>Start {formatMinutes(stepTimerMinutes(step)!)} Timer</span>
                             </button>
                           </div>
                         )}

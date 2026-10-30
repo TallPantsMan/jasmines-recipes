@@ -98,7 +98,7 @@ export function payloadToRecipe(data: unknown): Recipe | null {
 
   const now = new Date().toISOString();
   const stamp = Date.now();
-  const types: RecipeSourceType[] = ['website', 'instagram', 'cookbook', 'family', 'manual'];
+  const types: RecipeSourceType[] = ['website', 'instagram', 'video', 'cookbook', 'family', 'manual'];
   const sourceType = types.includes(p.y as RecipeSourceType) ? (p.y as RecipeSourceType) : 'manual';
   const cover = clean(p.f, 2000);
   const link = clean(p.u, 2000);

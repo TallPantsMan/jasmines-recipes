@@ -4,6 +4,8 @@ import { X, ChevronLeft, ChevronRight, Check, ListFilter, Sun, Timer, Sparkles }
 import confetti from 'canvas-confetti';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
+import { stepTimerMinutes } from '../utils/stepTimer';
+import { notify } from '../services/dialog';
 
 interface CookModeModalProps {
   recipe: Recipe;
@@ -20,6 +22,20 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
   const [showPortraitIngredients, setShowPortraitIngredients] = useState(false);
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
   const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [timerSecs, setTimerSecs] = useState<number | null>(null);
+
+  // A timer belongs to one step, so moving to another step clears it
+  useEffect(() => { setTimerSecs(null); }, [currentStepIndex]);
+
+  useEffect(() => {
+    if (timerSecs === null) return;
+    if (timerSecs <= 0) {
+      notify(`⏰ Timer finished for ${recipe.title}!`);
+      return;
+    }
+    const t = setTimeout(() => setTimerSecs(s => (s === null ? null : s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [timerSecs, recipe.title]);
 
   // Screen Wake Lock API
   useEffect(() => {
@@ -46,6 +62,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
 
   const totalSteps = recipe.instructions.length;
   const currentStep = recipe.instructions[currentStepIndex];
+  const stepMinutes = currentStep ? stepTimerMinutes(currentStep) : undefined;
 
   const handleNext = () => {
     if (currentStepIndex < totalSteps - 1) {
@@ -175,12 +192,26 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
             {currentStep?.text}
           </p>
 
-          {currentStep?.timerMinutes && (
+          {stepMinutes && (
             <div className="mt-6">
-              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs sm:text-sm">
-                <Timer className="w-4 h-4" />
-                <span>Timer suggested: {formatMinutes(currentStep.timerMinutes)}</span>
-              </span>
+              {timerSecs === null ? (
+                <button
+                  onClick={() => setTimerSecs(stepMinutes * 60)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs sm:text-sm cursor-pointer"
+                >
+                  <Timer className="w-4 h-4" />
+                  <span>Start {formatMinutes(stepMinutes)} timer</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setTimerSecs(null)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-sm cursor-pointer"
+                  title="Tap to stop the timer"
+                >
+                  <Timer className="w-4 h-4" />
+                  <span>{timerSecs > 0 ? `${Math.floor(timerSecs / 60)}:${String(timerSecs % 60).padStart(2, '0')} left (tap to stop)` : 'Time is up!'}</span>
+                </button>
+              )}
             </div>
           )}
 

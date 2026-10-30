@@ -382,3 +382,44 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
     error: 'Instagram requires verification for this specific link. You can paste the copied caption text below to format in 1 click!'
   };
 }
+
+export function isVideoLink(text: string): boolean {
+  return /https?:\/\/(?:[\w-]+\.)?(?:tiktok\.com|youtube\.com|youtu\.be)\//i.test(text);
+}
+
+/** Extracts a recipe from a TikTok or YouTube link by reading the video's caption or description. */
+export async function fetchVideoRecipeFromUrl(inputUrlOrText: string): Promise<InstagramFetchResult> {
+  const urlMatch = inputUrlOrText.match(/https?:\/\/[^\s]+/i);
+  const targetUrl = urlMatch ? urlMatch[0].replace(/[)\].,;!]+$/, '') : '';
+  const platformName = /tiktok/i.test(targetUrl) ? 'TikTok' : 'YouTube';
+  if (!targetUrl) throw new Error('Please enter a valid TikTok or YouTube link');
+
+  const fail = (error: string): InstagramFetchResult => ({ success: false, sourceUrl: targetUrl, authorName: platformName, error });
+
+  try {
+    const apiRes = await apiFetch(`/api/video?url=${encodeURIComponent(targetUrl)}`);
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      const caption: string = data.caption || '';
+      if (caption.length > 10) {
+        const { creator, ...parsed } = await refineWithAi(caption, parseRawRecipeText(caption, data.title || undefined, { source: 'text' }));
+        return {
+          success: true,
+          recipe: {
+            ...parsed,
+            coverImage: data.image || undefined,
+            sourceType: 'video',
+            sourceUrl: targetUrl,
+            sourceName: creator ? `@${creator} on ${platformName}` : `${data.authorName || platformName} on ${platformName}`,
+          },
+          caption,
+          sourceUrl: targetUrl,
+          authorName: data.authorName || platformName,
+        };
+      }
+    }
+  } catch {
+    // Fall through to the paste-it-yourself message
+  }
+  return fail(`${platformName} didn't share the recipe text for this link. Open the video, copy the caption or description, and paste it into the text box below.`);
+}

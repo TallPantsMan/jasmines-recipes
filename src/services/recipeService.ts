@@ -222,6 +222,21 @@ export const RecipeService = {
     } catch {}
   },
 
+  async setFolders(id: string, folders: string[]): Promise<void> {
+    const updatedAt = new Date().toISOString();
+    const current = loadFromLocalStorage() || [];
+    const match = current.find(r => r.id === id);
+    if (match) {
+      match.folders = folders;
+      match.updatedAt = updatedAt;
+      saveToLocalStorage(current);
+    }
+
+    try {
+      await db.recipes.update(id, { folders, updatedAt });
+    } catch {}
+  },
+
   async addJasmineNote(id: string, text: string): Promise<JasmineNote> {
     const newNote: JasmineNote = {
       id: 'note-' + Date.now(),

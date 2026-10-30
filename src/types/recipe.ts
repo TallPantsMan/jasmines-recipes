@@ -21,7 +21,7 @@ export interface JasmineNote {
   date: string;
 }
 
-export type RecipeSourceType = 'website' | 'instagram' | 'cookbook' | 'family' | 'manual';
+export type RecipeSourceType = 'website' | 'instagram' | 'video' | 'cookbook' | 'family' | 'manual';
 
 export interface Recipe {
   id: string;
@@ -44,6 +44,8 @@ export interface Recipe {
   rating: number;
   favorite: boolean;
   wantToTry?: boolean;
+  /** Cookbook folders (made by the family, e.g. "Holidays") this recipe has been put in */
+  folders?: string[];
   cookedCount?: number;
   lastCookedDate?: string;
   createdAt: string;
