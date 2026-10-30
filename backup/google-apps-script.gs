@@ -255,6 +255,43 @@ function formatAll() {
   book.moveActiveSheet(1);
 }
 
+/**
+ * Daily backup: once a day a hidden copy of the "Profiles" tab is made ("Backup 2026-10-31"); the newest 7 are kept.
+ * Run installDailyBackup once from the editor to switch it on. To get recipes back, unhide a backup tab
+ * (View > Hidden sheets), and copy the rows you want into the "Profiles" tab.
+ */
+var BACKUP_KEEP = 7;
+
+function dailyBackup() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var book = SpreadsheetApp.getActiveSpreadsheet();
+    var src = book.getSheetByName(PROFILES_TAB);
+    if (!src) return;
+    var name = 'Backup ' + Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
+    var old = book.getSheetByName(name);
+    if (old) book.deleteSheet(old);
+    var copy = src.copyTo(book);
+    copy.setName(name);
+    copy.setTabColor('#C9BFAF');
+    copy.hideSheet();
+    var backups = book.getSheets().filter(function (s) { return s.getName().indexOf('Backup ') === 0; })
+      .sort(function (a, b) { return a.getName() < b.getName() ? -1 : 1; });
+    while (backups.length > BACKUP_KEEP) book.deleteSheet(backups.shift());
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function installDailyBackup() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'dailyBackup') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('dailyBackup').timeBased().everyDays(1).atHour(3).create();
+  dailyBackup();
+}
+
 function reply(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
