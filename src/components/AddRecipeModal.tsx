@@ -288,9 +288,9 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 landscape:p-2 sm:landscape:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-stretch sm:items-center justify-center p-0 sm:p-4 landscape:p-2 sm:landscape:p-4 animate-in fade-in duration-200">
       
-      <div className="bg-[#FDFBF7] w-full max-w-4xl min-h-screen sm:min-h-fit sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[100dvh] sm:max-h-[94vh] border border-[#EFE7DE]">
+      <div className="bg-[#FDFBF7] w-full max-w-4xl h-[100dvh] sm:h-auto sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col sm:max-h-[94vh] border border-[#EFE7DE]">
         
         {/* ReciMe Header */}
         <div className="bg-white px-5 sm:px-7 py-3.5 sm:py-4 border-b border-[#EFE7DE] flex items-center justify-between">

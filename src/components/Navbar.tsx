@@ -27,7 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 bg-[#FDFBF7]/95 backdrop-blur-md border-b border-[#F2ECE3] px-4 sm:px-6 py-3 transition-all">
+    <header style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }} className="sticky top-0 z-30 bg-[#FDFBF7]/95 backdrop-blur-md border-b border-[#F2ECE3] px-4 sm:px-6 pb-3 transition-all">
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
         
         {/* ReciMe Styled Logo & Branding */}

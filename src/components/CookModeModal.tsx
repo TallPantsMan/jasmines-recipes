@@ -82,7 +82,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
   const isLastStep = currentStepIndex === totalSteps - 1;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-[#191614] text-[#FAF8F5] flex flex-col justify-between overflow-hidden select-none animate-in fade-in duration-200">
+    <div style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }} className="fixed inset-0 z-[60] bg-[#191614] text-[#FAF8F5] flex flex-col justify-between overflow-hidden select-none animate-in fade-in duration-200">
       
       {/* Top Header Bar */}
       <header className="px-4 sm:px-6 py-3 border-b border-white/10 flex items-center justify-between bg-black/40 backdrop-blur-md">
