@@ -5,7 +5,7 @@ import { RecipeService } from './services/recipeService';
 import { signOut } from './services/auth';
 import { backupRecipe, backupAll, flushBackupQueue } from './services/backupService';
 import {
-  sendRecipe, shareApp, recipeFromCode, type ShareOutcome
+  sendRecipe, shareApp, recipeFromCode, hasShortCodeReady, prepareShortCodes, type ShareOutcome
 } from './services/shareService';
 import { ReceivedRecipeModal } from './components/ReceivedRecipeModal';
 import { Navbar } from './components/Navbar';
@@ -262,8 +262,19 @@ export function App() {
   };
 
   const handleSendRecipe = async (recipe: Recipe) => {
-    reportShare(await sendRecipe(recipe), 'Recipe code copied. Paste it in a message to Jasmine.');
+    // Short codes are normally made ahead of time; when this one isn't ready yet, say so instead of looking frozen
+    if (!hasShortCodeReady(recipe)) setToast('Getting the share code ready…');
+    const outcome = await sendRecipe(recipe);
+    setToast('');
+    reportShare(outcome, 'Recipe code copied. Paste it in a message to Jasmine.');
   };
+
+  // Get short codes ready in the background so Send opens straight away
+  useEffect(() => {
+    if (isLoading || recipes.length === 0) return;
+    const timer = setTimeout(() => void prepareShortCodes(recipes), 3000);
+    return () => clearTimeout(timer);
+  }, [recipes, isLoading]);
 
   const handleShareApp = async () => {
     reportShare(await shareApp(), 'App link copied.');

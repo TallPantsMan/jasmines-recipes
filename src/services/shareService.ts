@@ -194,19 +194,78 @@ async function shareOrCopy(data: { title: string; text: string; url?: string }):
   }
 }
 
+// Making a short code means a trip to the server and the Sheet, which takes seconds. Codes are remembered per recipe
+// (and re-made when the recipe changes), and made ahead of time in the background, so tapping Send can open the share sheet at once.
+const CODE_CACHE_KEY = 'jasmines_recipes_short_codes';
+type CodeCache = Record<string, { hash: string; code: string }>;
+
+const loadCodeCache = (): CodeCache => {
+  try {
+    return JSON.parse(localStorage.getItem(CODE_CACHE_KEY) || '{}') as CodeCache;
+  } catch {
+    return {};
+  }
+};
+
+const rememberCode = (id: string, hash: string, code: string) => {
+  try {
+    const cache = loadCodeCache();
+    cache[id] = { hash, code };
+    localStorage.setItem(CODE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    /* private mode or full storage: the code is just made again next time */
+  }
+};
+
+// A quick fingerprint of what would be sent, so an edited recipe gets a fresh code
+const fingerprint = (text: string): string => {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return `${text.length}:${h}`;
+};
+
+const cachedShortCode = (r: Recipe): string | null => {
+  const hit = loadCodeCache()[r.id];
+  return hit && hit.hash === fingerprint(JSON.stringify(recipeToPayload(r))) ? hit.code : null;
+};
+
+/** True when Send can open straight away because the short code is already made. */
+export const hasShortCodeReady = (r: Recipe): boolean => cachedShortCode(r) !== null;
+
 /** A short code kept on the server, or null when that isn't available right now. */
 async function shortCodeFor(r: Recipe): Promise<string | null> {
+  const ready = cachedShortCode(r);
+  if (ready) return ready;
   try {
+    const payload = recipeToPayload(r);
     const res = await apiFetch('/api/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payload: await pack(recipeToPayload(r)) }),
+      body: JSON.stringify({ payload: await pack(payload) }),
     });
     if (!res.ok) return null;
     const { code } = await res.json();
-    return typeof code === 'string' && code ? code : null;
+    if (typeof code !== 'string' || !code) return null;
+    rememberCode(r.id, fingerprint(JSON.stringify(payload)), code);
+    return code;
   } catch {
     return null;
+  }
+}
+
+let preparing = false;
+
+/** Quietly makes short codes for recipes that don't have one yet, one at a time. Safe to call as often as you like. */
+export async function prepareShortCodes(recipes: Recipe[]): Promise<void> {
+  if (preparing) return;
+  preparing = true;
+  try {
+    for (const r of recipes) {
+      if (cachedShortCode(r)) continue;
+      if ((await shortCodeFor(r)) === null) break; // offline or not set up: try again next time
+    }
+  } finally {
+    preparing = false;
   }
 }
 
