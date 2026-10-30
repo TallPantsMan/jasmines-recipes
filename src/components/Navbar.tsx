@@ -9,6 +9,7 @@ interface NavbarProps {
   onImport: () => void;
   onShowWelcome: () => void;
   totalCount: number;
+  profile: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,7 +19,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onExport,
   onImport,
   onShowWelcome,
-  totalCount
+  totalCount,
+  profile
 }) => {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
@@ -35,7 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
                 <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#221E1B] tracking-tight whitespace-nowrap">
-                  Jasmine's Recipes
+                  {profile}'s Recipes
                 </h1>
                 <span className="text-[11px] font-bold tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-[#FFEFEA] text-[#FF5B26] whitespace-nowrap">
                   {totalCount} {totalCount === 1 ? 'recipe' : 'recipes'}

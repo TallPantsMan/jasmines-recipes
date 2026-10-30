@@ -52,7 +52,7 @@ export default function LoginGate({ children }: { children: ReactNode }) {
           <ChefHat className="w-8 h-8" />
         </div>
         <div>
-          <h1 className="font-serif text-2xl font-bold">Jasmine's Recipe Box</h1>
+          <h1 className="font-serif text-2xl font-bold">Recipe Box</h1>
           <p className="text-sm text-[#7D7366] mt-1">Enter the password to open it.</p>
         </div>
         <input

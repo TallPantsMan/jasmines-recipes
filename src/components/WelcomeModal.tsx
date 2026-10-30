@@ -58,7 +58,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose }) =
             Welcome! 🍳
           </h1>
           <p className="text-sm sm:text-base text-[#7D7366] font-medium">
-            Jasmine's family recipe box
+            Your family recipe box
           </p>
         </div>
 

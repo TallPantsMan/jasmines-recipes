@@ -4,6 +4,7 @@ import type { Recipe, JasmineNote } from '../types/recipe';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
 import { stepTimerMinutes } from '../utils/stepTimer';
+import { nutritionBasis } from '../services/nutritionService';
 import { notify, askConfirm } from '../services/dialog';
 import {
   X, Heart, Star, Play, Plus, Trash2, Edit3,
@@ -22,6 +23,7 @@ interface RecipeDetailModalProps {
   onDeleteNote: (recipeId: string, noteId: string) => void;
   onAddPhoto: (recipeId: string, dataUrl: string) => void;
   onRemovePhoto: (recipeId: string, index: number) => void;
+  onEstimateNutrition: (recipe: Recipe) => Promise<boolean>;
   allFolders: string[];
   onSetFolders: (recipeId: string, folders: string[]) => void;
   onStartCooking: (recipe: Recipe, servings: number) => void;
@@ -39,11 +41,35 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   onDeleteNote,
   onAddPhoto,
   onRemovePhoto,
+  onEstimateNutrition,
   allFolders,
   onSetFolders,
   onStartCooking
 }) => {
   const [newFolderName, setNewFolderName] = useState('');
+  const [nutritionBusy, setNutritionBusy] = useState(false);
+  const [nutritionFailed, setNutritionFailed] = useState(false);
+  const nutritionTried = React.useRef<string>('');
+
+  const runNutrition = async () => {
+    setNutritionBusy(true);
+    setNutritionFailed(false);
+    const ok = await onEstimateNutrition(recipe);
+    setNutritionFailed(!ok);
+    setNutritionBusy(false);
+  };
+
+  // Work it out automatically the first time a recipe is opened (and again if the ingredients or servings changed)
+  const basis = nutritionBasis(recipe);
+  const nutritionStale = !!recipe.nutrition && recipe.nutrition.basis !== basis;
+  useEffect(() => {
+    if (recipe.ingredients.length === 0) return;
+    if (recipe.nutrition && !nutritionStale) return;
+    if (nutritionTried.current === `${recipe.id}:${basis}`) return;
+    nutritionTried.current = `${recipe.id}:${basis}`;
+    runNutrition();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe.id, basis]);
   const [servings, setServings] = useState<number>(recipe.servings || 4);
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
   const [newNoteText, setNewNoteText] = useState('');
@@ -287,6 +313,49 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                   <p className="mt-2.5 text-xs sm:text-sm text-[#544C42] leading-relaxed">
                     {recipe.description}
                   </p>
+                )}
+
+                {/* Nutrition estimate */}
+                {recipe.ingredients.length > 0 && (
+                  <div className="mt-4 p-3 bg-white rounded-2xl border border-[#EFE7DE] space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[#221E1B]">Nutrition per serving</span>
+                      <button
+                        onClick={runNutrition}
+                        disabled={nutritionBusy}
+                        className="text-[11px] font-bold text-[#FF5B26] hover:underline disabled:opacity-50 cursor-pointer"
+                      >
+                        {nutritionBusy ? 'Estimating…' : recipe.nutrition ? 'Re-estimate' : 'Estimate'}
+                      </button>
+                    </div>
+                    {recipe.nutrition ? (
+                      <>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          {([
+                            ['Calories', recipe.nutrition.calories, ''],
+                            ['Protein', recipe.nutrition.proteinG, 'g'],
+                            ['Carbs', recipe.nutrition.carbsG, 'g'],
+                            ['Fat', recipe.nutrition.fatG, 'g'],
+                          ] as const).map(([label, value, unit]) => (
+                            <div key={label} className="rounded-xl bg-[#FDFBF7] border border-[#F0E8DC] py-2">
+                              <div className="text-sm font-bold text-[#221E1B]">{value}{unit}</div>
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-[#8A8072]">{label}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-[#A09587]">
+                          AI estimate from the ingredients, for {recipe.servings || 4} servings. Not exact.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-[#8A8072]">
+                        {nutritionBusy ? 'Working out calories and macros…' : nutritionFailed ? "Couldn't estimate right now. Tap Estimate to try again." : 'Tap Estimate for calories and macros.'}
+                      </p>
+                    )}
+                    {recipe.nutrition && nutritionFailed && (
+                      <p className="text-[11px] text-amber-700">Couldn't refresh the estimate right now.</p>
+                    )}
+                  </div>
                 )}
 
                 {/* Cookbook folders */}

@@ -167,7 +167,9 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
                 {formatMinutes(totalTime)}
               </span>
             )}
-            <span className="font-medium text-[#82786D]">{recipe.ingredients.length} items</span>
+            <span className="font-medium text-[#82786D]">
+              {recipe.nutrition ? `${recipe.nutrition.calories} cal` : `${recipe.ingredients.length} items`}
+            </span>
             <button
               type="button"
               onClick={(e) => {

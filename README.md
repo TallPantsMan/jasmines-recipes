@@ -1,4 +1,4 @@
-# Jasmine's Recipes 🍳
+# Recipe Box 🍳
 
 A modern, subscription-free recipe management PWA inspired by ReciMe.
 

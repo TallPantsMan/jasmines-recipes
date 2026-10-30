@@ -1,5 +1,5 @@
 import { db } from './db';
-import type { Recipe, JasmineNote } from '../types/recipe';
+import type { Recipe, JasmineNote, Nutrition } from '../types/recipe';
 
 const LOCAL_STORAGE_KEY = 'jasmines_recipes_persistent_store_v2';
 const STORAGE_PERSISTED_KEY = 'jasmines_recipes_persisted_storage';
@@ -219,6 +219,21 @@ export const RecipeService = {
 
     try {
       await db.recipes.update(id, { rating, updatedAt: new Date().toISOString() });
+    } catch {}
+  },
+
+  async setNutrition(id: string, nutrition: Nutrition): Promise<void> {
+    const updatedAt = new Date().toISOString();
+    const current = loadFromLocalStorage() || [];
+    const match = current.find(r => r.id === id);
+    if (match) {
+      match.nutrition = nutrition;
+      match.updatedAt = updatedAt;
+      saveToLocalStorage(current);
+    }
+
+    try {
+      await db.recipes.update(id, { nutrition, updatedAt });
     } catch {}
   },
 

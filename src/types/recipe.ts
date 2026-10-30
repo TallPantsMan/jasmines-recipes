@@ -21,6 +21,17 @@ export interface JasmineNote {
   date: string;
 }
 
+/** Per serving. A rough AI estimate, not a lab result. */
+export interface Nutrition {
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fiberG?: number;
+  /** The servings and ingredients the estimate was made for, so we know when it has gone stale */
+  basis?: string;
+}
+
 export type RecipeSourceType = 'website' | 'instagram' | 'video' | 'cookbook' | 'family' | 'manual';
 
 export interface Recipe {
@@ -44,6 +55,8 @@ export interface Recipe {
   rating: number;
   favorite: boolean;
   wantToTry?: boolean;
+  /** AI estimate per serving, worked out from the ingredients */
+  nutrition?: Nutrition;
   /** Cookbook folders (made by the family, e.g. "Holidays") this recipe has been put in */
   folders?: string[];
   cookedCount?: number;

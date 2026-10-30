@@ -1,6 +1,6 @@
 {
-  "short_name": "Jasmine's Recipes",
-  "name": "Jasmine's Recipes - Kitchen Recipe Box",
+  "short_name": "Recipe Box",
+  "name": "Recipe Box",
   "icons": [
     {
       "src": "./apple-touch-icon.png",

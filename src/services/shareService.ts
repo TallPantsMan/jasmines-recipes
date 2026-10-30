@@ -1,4 +1,4 @@
-﻿import type { Recipe, RecipeSourceType } from '../types/recipe';
+import type { Recipe, RecipeSourceType } from '../types/recipe';
 import { apiFetch } from './auth';
 
 /**
@@ -276,12 +276,12 @@ export async function sendRecipe(r: Recipe): Promise<ShareOutcome> {
   const code = short ?? (await buildRecipeCode(r));
   const text =
     `Here's a recipe for you: ${r.title}\n\n` +
-    `To save it: open Jasmine's Recipe Box, tap Import, and paste this whole message.\n\n` +
+    `To save it: open Recipe Box, tap Import, and paste this whole message.\n\n` +
     `Recipe code: ${short ? code : '\n' + code}`;
   return shareOrCopy({ title: r.title, text });
 }
 export function shareApp(): Promise<ShareOutcome> {
-  return shareOrCopy({ title: "Jasmine's Recipe Box", text: "Jasmine's Recipe Box", url: appAddress() });
+  return shareOrCopy({ title: "Recipe Box", text: "Recipe Box", url: appAddress() });
 }
 
 

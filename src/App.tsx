@@ -1,9 +1,10 @@
-﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { fetchInstagramCover } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { signOut } from './services/auth';
 import { syncProfile, rememberDeletion } from './services/syncService';
+import { estimateNutrition } from './services/nutritionService';
 import { setProfile, type ProfileName } from './services/profile';
 import { backupRecipe, backupAll, flushBackupQueue } from './services/backupService';
 import {
@@ -193,6 +194,16 @@ export function App({ profile }: { profile: ProfileName }) {
     await RecipeService.setFolders(id, folders);
     setRecipes(prev => prev.map(r => r.id === id ? { ...r, folders } : r));
     setActiveRecipe(prev => (prev && prev.id === id ? { ...prev, folders } : prev));
+  };
+
+  /** Works out calories and macros for a recipe and saves them. Returns false if the AI couldn't do it right now. */
+  const handleEstimateNutrition = async (recipe: Recipe): Promise<boolean> => {
+    const nutrition = await estimateNutrition(recipe);
+    if (!nutrition) return false;
+    await RecipeService.setNutrition(recipe.id, nutrition);
+    setRecipes(prev => prev.map(r => r.id === recipe.id ? { ...r, nutrition } : r));
+    setActiveRecipe(prev => (prev && prev.id === recipe.id ? { ...prev, nutrition } : prev));
+    return true;
   };
 
   const handleDeleteFolder = async (name: string) => {
@@ -448,6 +459,7 @@ export function App({ profile }: { profile: ProfileName }) {
         onImport={handleImportBackup}
         onShowWelcome={() => setIsWelcomeOpen(true)}
         totalCount={recipes.length}
+        profile={profile}
       />
 
       {/* ReciMe Pill Categories */}
@@ -468,7 +480,7 @@ export function App({ profile }: { profile: ProfileName }) {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-[#8C8274] gap-3">
             <div className="w-8 h-8 border-3 border-[#FF5B26] border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm font-semibold">Opening Jasmine's Recipe Box...</p>
+            <p className="text-sm font-semibold">Opening your Recipe Box...</p>
           </div>
         ) : filteredRecipes.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 landscape:grid-cols-2 landscape:md:grid-cols-3 gap-5 sm:gap-6">
@@ -591,6 +603,7 @@ export function App({ profile }: { profile: ProfileName }) {
           onDeleteNote={handleDeleteNote}
           onAddPhoto={handleAddPhoto}
           onRemovePhoto={handleRemovePhoto}
+          onEstimateNutrition={handleEstimateNutrition}
           allFolders={folderNames}
           onSetFolders={handleSetFolders}
           onStartCooking={(r, s) => {
