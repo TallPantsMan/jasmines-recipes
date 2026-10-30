@@ -1,4 +1,5 @@
 ﻿import React, { useState } from 'react';
+import { notify } from '../services/dialog';
 import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../types/recipe';
 import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl } from '../services/recipeParser';
 import { processCookbookImages, type OcrProgress } from '../services/ocrService';
@@ -269,7 +270,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         (p) => setOcrProgress(p)
       );
       if (rawText.replace(/\s/g, '').length < 20) {
-        alert("We couldn't read any text in these photos. Try a clearer shot with good lighting, held straight above the page.");
+        notify("We couldn't read any text in these photos. Try a clearer shot with good lighting, held straight above the page.");
         return;
       }
       // Small copies of the pages are kept on the recipe for reference; the food photo becomes its cover
@@ -286,7 +287,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       });
     } catch (err) {
       console.error(err);
-      alert('Reading the photos failed. Try clearer shots with good lighting!');
+      notify('Reading the photos failed. Try clearer shots with good lighting!');
     } finally {
       setIsProcessingOcr(false);
       setOcrProgress(null);
@@ -297,7 +298,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const handleSubmitFinal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      alert('Please enter a recipe title');
+      notify('Please enter a recipe title');
       return;
     }
 

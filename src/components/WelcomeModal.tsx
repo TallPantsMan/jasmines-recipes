@@ -41,7 +41,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose }) =
     <div
       onClick={handleDismiss}
       className={`fixed inset-0 z-[70] bg-[#FDFBF7]/90 backdrop-blur-md flex items-center justify-center p-6 cursor-pointer select-none transition-opacity duration-500 ease-out ${
-        isFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        isFading ? 'opacity-0' : 'opacity-100'
       }`}
       title="Tap anywhere to dismiss"
     >
@@ -55,10 +55,10 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose }) =
         {/* Pure & Sweet Greeting */}
         <div className="space-y-1.5 pt-1">
           <h1 className="font-serif text-3xl sm:text-4xl font-extrabold text-[#221E1B] tracking-tight">
-            Welcome, Jasmine! 🍳
+            Welcome! 🍳
           </h1>
           <p className="text-sm sm:text-base text-[#7D7366] font-medium">
-            Your personal kitchen recipe box
+            Jasmine's family recipe box
           </p>
         </div>
 

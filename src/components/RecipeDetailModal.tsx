@@ -3,6 +3,7 @@ import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe, JasmineNote } from '../types/recipe';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
+import { notify, askConfirm } from '../services/dialog';
 import {
   X, Heart, Star, Play, Plus, Trash2, Edit3,
   ExternalLink, Camera, Check, Timer, MessageSquare, Bookmark
@@ -62,7 +63,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
       }, 1000);
     } else if (timerSecondsLeft === 0 && isTimerRunning) {
       setIsTimerRunning(false);
-      alert(`⏰ Timer finished for ${recipe.title}!`);
+      notify(`⏰ Timer finished for ${recipe.title}!`);
     }
     return () => clearInterval(interval);
   }, [isTimerRunning, timerSecondsLeft, recipe.title]);
@@ -167,8 +168,8 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
               <span>Edit</span>
             </button>
             <button
-              onClick={() => {
-                if (confirm(`Are you sure you want to delete "${recipe.title}"?`)) {
+              onClick={async () => {
+                if (await askConfirm(`Are you sure you want to delete "${recipe.title}"?`, 'Delete')) {
                   onDelete(recipe.id);
                   onClose();
                 }

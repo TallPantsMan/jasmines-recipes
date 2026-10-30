@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Sparkles, Download, Upload, UtensilsCrossed, ChefHat, Share2, CheckCircle } from 'lucide-react';
+import { Plus, Search, Sparkles, Download, Upload, UtensilsCrossed, ChefHat, CheckCircle } from 'lucide-react';
 
 interface NavbarProps {
   searchQuery: string;
@@ -7,7 +7,6 @@ interface NavbarProps {
   onAddClick: () => void;
   onExport: () => void;
   onImport: () => void;
-  onShare: () => void;
   onShowWelcome: () => void;
   totalCount: number;
 }
@@ -18,7 +17,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onAddClick,
   onExport,
   onImport,
-  onShare,
   onShowWelcome,
   totalCount
 }) => {
@@ -35,11 +33,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               <UtensilsCrossed className="w-5 h-5 stroke-[2.2]" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#221E1B] tracking-tight">
+              <div className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+                <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#221E1B] tracking-tight whitespace-nowrap">
                   Jasmine's Recipes
                 </h1>
-                <span className="text-[11px] font-bold tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-[#FFEFEA] text-[#FF5B26]">
+                <span className="text-[11px] font-bold tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-[#FFEFEA] text-[#FF5B26] whitespace-nowrap">
                   {totalCount} {totalCount === 1 ? 'recipe' : 'recipes'}
                 </span>
               </div>
@@ -115,17 +113,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <span>Saved & Persistent</span>
                     </span>
                   </div>
-
-                  <button
-                    onClick={() => { setShowSettingsMenu(false); onShare(); }}
-                    className="w-full text-left px-3.5 py-2 text-[#3D372F] hover:bg-[#FFF7F4] flex items-center gap-2.5 transition-colors font-medium cursor-pointer"
-                  >
-                    <Share2 className="w-4 h-4 text-[#FF5B26]" />
-                    <div>
-                      <div className="text-xs font-bold text-[#221E1B]">Copy Sync / Share Link</div>
-                      <div className="text-[10px] text-[#8C8274]">Sync across phone, tablet, & computer</div>
-                    </div>
-                  </button>
 
                   <button
                     onClick={() => { setShowSettingsMenu(false); onExport(); }}

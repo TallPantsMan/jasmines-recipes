@@ -7,6 +7,8 @@ import { backupRecipe, backupAll, flushBackupQueue } from './services/backupServ
 import {
   sendRecipe, shareApp, recipeFromCode, hasShortCodeReady, prepareShortCodes, type ShareOutcome
 } from './services/shareService';
+import { notify } from './services/dialog';
+import { DialogHost } from './components/DialogHost';
 import { ReceivedRecipeModal } from './components/ReceivedRecipeModal';
 import { Navbar } from './components/Navbar';
 import { CategoryFilterBar } from './components/CategoryFilterBar';
@@ -48,28 +50,6 @@ export function App() {
         await RecipeService.init();
         const loaded = await RecipeService.getAllRecipes();
         setRecipes(loaded);
-
-        // Check if user opened a cross-device ?share= sync link
-        if (typeof window !== 'undefined') {
-          const params = new URLSearchParams(window.location.search);
-          const shareData = params.get('share');
-          if (shareData) {
-            try {
-              const decoded = decodeURIComponent(atob(shareData));
-              const sharedRecipes = JSON.parse(decoded);
-              if (Array.isArray(sharedRecipes) && sharedRecipes.length > 0) {
-                if (confirm(`Sync ${sharedRecipes.length} recipes from shared link into your kitchen recipe box?`)) {
-                  await RecipeService.importFromJson(decoded);
-                  const merged = await RecipeService.getAllRecipes();
-                  setRecipes(merged);
-                  window.history.replaceState({}, '', window.location.pathname);
-                }
-              }
-            } catch (e) {
-              console.warn('Could not decode share link', e);
-            }
-          }
-        }
       } catch (err) {
         console.error('Failed to initialize recipes:', err);
       } finally {
@@ -309,7 +289,7 @@ export function App() {
     setBackupStatus('Backing up…');
     const result = await backupAll(recipes);
     setBackupStatus(result.ok ? `Backed up ${result.sent} ✓` : 'Backup failed');
-    if (!result.ok) alert(result.reason);
+    if (!result.ok) notify(result.reason || 'Backup failed.');
     setTimeout(() => setBackupStatus(''), 4000);
   };
 
@@ -363,9 +343,9 @@ export function App() {
           const count = await RecipeService.importFromJson(content);
           const reloaded = await RecipeService.getAllRecipes();
           setRecipes(reloaded);
-          alert(`Successfully imported ${count} recipes!`);
+          notify(`Successfully imported ${count} recipes!`);
         } catch {
-          alert('Failed to import backup file. Check file format.');
+          notify('Failed to import backup file. Check file format.');
         }
       };
       reader.readAsText(file);
@@ -373,29 +353,10 @@ export function App() {
     input.click();
   };
 
-  const handleShareBox = () => {
-    try {
-      const exportable = recipes.map(r => ({
-        ...r,
-        userPhotos: [] // Keep share URLs compact without huge photo bytes
-      }));
-      const encoded = btoa(encodeURIComponent(JSON.stringify(exportable)));
-      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${encoded}`;
-      
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(shareUrl);
-        alert('Recipe Box Sync Link copied to clipboard!\n\nOpen this link on Jasmine\'s phone or any other device to sync all recipes.');
-      } else {
-        prompt('Copy this sync link to transfer recipes across devices:', shareUrl);
-      }
-    } catch {
-      handleExportBackup();
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#221E1B]">
-      
+      <DialogHost />
+
       {/* ReciMe Styled Top Navigation */}
       <Navbar
         searchQuery={searchQuery}
@@ -406,7 +367,6 @@ export function App() {
         }}
         onExport={handleExportBackup}
         onImport={handleImportBackup}
-        onShare={handleShareBox}
         onShowWelcome={() => setIsWelcomeOpen(true)}
         totalCount={recipes.length}
       />
@@ -489,11 +449,11 @@ export function App() {
           <p className="font-serif font-bold text-[#221E1B]">
             For Jasmine, Love Alex
           </p>
-          <div className="flex items-center gap-3 text-[11px] font-semibold text-[#A09587]">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-3 gap-y-1.5 text-[11px] font-semibold text-[#A09587] [&>*]:whitespace-nowrap">
             <span>📱 Add to Home Screen</span>
-            <span>•</span>
+            <span className="hidden sm:inline">•</span>
             <button onClick={handleShareApp} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Share app</button>
-            <span>•</span>
+            <span className="hidden sm:inline">•</span>
             <button
               onClick={handleBackupNow}
               disabled={backupStatus === 'Backing up…'}
@@ -501,7 +461,7 @@ export function App() {
             >
               {backupStatus || 'Back up now'}
             </button>
-            <span>•</span>
+            <span className="hidden sm:inline">•</span>
             <button onClick={signOut} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Sign out</button>
           </div>
         </div>
