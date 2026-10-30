@@ -89,12 +89,8 @@ export const RecipeService = {
         } catch (rehydrateErr) {
           console.warn('Could not rehydrate IndexedDB from localStorage:', rehydrateErr);
         }
-      } else {
-        try {
-          await db.recipes.bulkAdd(SEED_RECIPES);
-        } catch {}
-        saveToLocalStorage(SEED_RECIPES);
       }
+      // Nothing saved yet: start with an empty box (the sample recipes are only for "Reset to defaults")
     } catch (err) {
       console.error('RecipeService.init error:', err);
     }
@@ -126,7 +122,7 @@ export const RecipeService = {
       return fromIdb;
     }
 
-    return SEED_RECIPES;
+    return [];
   },
 
   async getRecipe(id: string): Promise<Recipe | undefined> {

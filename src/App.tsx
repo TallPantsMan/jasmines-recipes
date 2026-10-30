@@ -446,10 +446,12 @@ export function App() {
             </div>
             <div>
               <h3 className="font-serif text-lg sm:text-xl font-bold text-[#221E1B]">
-                No recipes found
+                {recipes.length === 0 ? 'Your recipe box is empty' : 'No recipes found'}
               </h3>
               <p className="text-xs sm:text-sm text-[#7D7366] mt-1">
-                {searchQuery
+                {recipes.length === 0
+                  ? 'Tap "Import Recipe" at the top to add your first one.'
+                  : searchQuery
                   ? `We couldn't find anything matching "${searchQuery}". Try searching for an ingredient or clearing your search.`
                   : `There are no recipes in the "${selectedCategory}" category yet.`}
               </p>
