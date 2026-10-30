@@ -3,6 +3,7 @@ import { fetchInstagramCover } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { signOut } from './services/auth';
+import { backupRecipe, backupAll, flushBackupQueue } from './services/backupService';
 import { Navbar } from './components/Navbar';
 import { CategoryFilterBar } from './components/CategoryFilterBar';
 import { RecipeCard } from './components/RecipeCard';
@@ -17,6 +18,7 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('All');
   const [isLoading, setIsLoading] = useState(true);
+  const [backupStatus, setBackupStatus] = useState('');
 
   // Modals
   const [activeRecipe, setActiveRecipe] = useState<Recipe | null>(null);
@@ -238,8 +240,22 @@ export function App() {
     }
   };
 
+  // Retry any backups that couldn't be sent earlier (no signal, etc.)
+  useEffect(() => {
+    void flushBackupQueue();
+  }, []);
+
+  const handleBackupNow = async () => {
+    setBackupStatus('Backing up…');
+    const result = await backupAll(recipes);
+    setBackupStatus(result.ok ? `Backed up ${result.sent} ✓` : 'Backup failed');
+    if (!result.ok) alert(result.reason);
+    setTimeout(() => setBackupStatus(''), 4000);
+  };
+
   const handleSaveRecipe = async (recipe: Recipe) => {
     await RecipeService.saveRecipe(recipe);
+    backupRecipe(recipe);
     setRecipes(prev => {
       const idx = prev.findIndex(r => r.id === recipe.id);
       if (idx >= 0) {
@@ -423,6 +439,14 @@ export function App() {
             <span>📱 Add to Home Screen</span>
             <span>•</span>
             <span>Landscape & Portrait Ready</span>
+            <span>•</span>
+            <button
+              onClick={handleBackupNow}
+              disabled={backupStatus === 'Backing up…'}
+              className="hover:text-[#FF5B26] transition-colors cursor-pointer"
+            >
+              {backupStatus || 'Back up now'}
+            </button>
             <span>•</span>
             <button onClick={signOut} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Sign out</button>
           </div>
