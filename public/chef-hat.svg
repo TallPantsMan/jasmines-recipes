@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B38" />
+      <stop offset="100%" stop-color="#F04E18" />
+    </linearGradient>
+    <filter id="hatShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#A52600" flood-opacity="0.32" />
+    </filter>
+  </defs>
+  <!-- Full background for iOS Apple Touch Icon & PWA -->
+  <rect width="512" height="512" fill="url(#bg)" />
+  
+  <!-- Subtle warm glow ring -->
+  <circle cx="256" cy="256" r="180" fill="#FFFFFF" opacity="0.08" />
+
+  <!-- Chef Hat Icon centered (inside safe zone) -->
+  <g transform="translate(106, 96) scale(12.5)" filter="url(#hatShadow)">
+    <!-- Base Chef Hat Shape -->
+    <path
+      d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z"
+      fill="#FFFFFF"
+      stroke="#FFFFFF"
+      stroke-width="0.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <!-- Hat band separation line -->
+    <path
+      d="M5.5 16.2h13"
+      stroke="#FF5B26"
+      stroke-width="1.6"
+      stroke-linecap="round"
+    />
+    <!-- Subtle vertical folds on the hat crown -->
+    <path
+      d="M9 7.5v4 M12 6.5v4.5 M15 7.5v4"
+      stroke="#FFDDD2"
+      stroke-width="0.9"
+      stroke-linecap="round"
+    />
+  </g>
+</svg>
