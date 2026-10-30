@@ -1,6 +1,5 @@
 import { db } from './db';
 import type { Recipe, JasmineNote } from '../types/recipe';
-import { SEED_RECIPES } from '../data/seedRecipes';
 
 const LOCAL_STORAGE_KEY = 'jasmines_recipes_persistent_store_v2';
 const STORAGE_PERSISTED_KEY = 'jasmines_recipes_persisted_storage';
@@ -330,13 +329,5 @@ export const RecipeService = {
       return data.length;
     }
     throw new Error('Invalid JSON recipe format');
-  },
-
-  async resetToDefaults(): Promise<void> {
-    try {
-      await db.recipes.clear();
-      await db.recipes.bulkAdd(SEED_RECIPES);
-    } catch {}
-    saveToLocalStorage(SEED_RECIPES);
   }
 };

@@ -382,14 +382,6 @@ export function App() {
     }
   };
 
-  const handleResetDefaults = async () => {
-    if (confirm('Reset your recipe box to the original sample recipes? This will overwrite your changes.')) {
-      await RecipeService.resetToDefaults();
-      const reloaded = await RecipeService.getAllRecipes();
-      setRecipes(reloaded);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#221E1B]">
       
@@ -404,7 +396,6 @@ export function App() {
         onExport={handleExportBackup}
         onImport={handleImportBackup}
         onShare={handleShareBox}
-        onReset={handleResetDefaults}
         onShowWelcome={() => setIsWelcomeOpen(true)}
         totalCount={recipes.length}
       />

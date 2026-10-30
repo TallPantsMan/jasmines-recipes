@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Sparkles, Download, Upload, RotateCcw, UtensilsCrossed, ChefHat, Share2, CheckCircle } from 'lucide-react';
+import { Plus, Search, Sparkles, Download, Upload, UtensilsCrossed, ChefHat, Share2, CheckCircle } from 'lucide-react';
 
 interface NavbarProps {
   searchQuery: string;
@@ -8,7 +8,6 @@ interface NavbarProps {
   onExport: () => void;
   onImport: () => void;
   onShare: () => void;
-  onReset: () => void;
   onShowWelcome: () => void;
   totalCount: number;
 }
@@ -20,7 +19,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onExport,
   onImport,
   onShare,
-  onReset,
   onShowWelcome,
   totalCount
 }) => {
@@ -153,14 +151,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <ChefHat className="w-4 h-4 text-[#FF5B26]" />
                     <span>Welcome & App Guide</span>
-                  </button>
-
-                  <button
-                    onClick={() => { setShowSettingsMenu(false); onReset(); }}
-                    className="w-full text-left px-3.5 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors font-medium cursor-pointer"
-                  >
-                    <RotateCcw className="w-4 h-4 text-red-500" />
-                    <span>Reset Sample Recipes</span>
                   </button>
                 </div>
               </>
