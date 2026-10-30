@@ -1,3 +1,40 @@
+const decodeEntities = (s: string) =>
+  s.replace(/&amp;/g, '&').replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/&#x2F;/g, '/').replace(/&quot;/g, '"');
+
+function extractImageUrl(html: string): string {
+  const patterns = [
+    /class="EmbeddedMediaImage"[^>]*?src="([^"]+)"/i,
+    /<img[^>]*class="[^"]*EmbeddedMediaImage[^"]*"[^>]*?src="([^"]+)"/i,
+    /property="og:image"\s+content="([^"]+)"/i,
+    /content="([^"]+)"\s+property="og:image"/i,
+    /"display_url":"([^"]+)"/i,
+    /"thumbnail_src":"([^"]+)"/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m && m[1]) return decodeEntities(m[1]);
+  }
+  return '';
+}
+
+// Instagram CDN links expire and block hotlinking, so we download the cover and return it inline.
+async function fetchImageAsDataUri(url: string): Promise<string> {
+  try {
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+        'Referer': 'https://www.instagram.com/',
+      },
+    });
+    if (!r.ok) return '';
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length === 0 || buf.length > 3_000_000) return '';
+    const type = r.headers.get('content-type') || 'image/jpeg';
+    return `data:${type};base64,${buf.toString('base64')}`;
+  } catch {
+    return '';
+  }
+}
 export default async function handler(req: any, res: any) {
   // CORS configuration
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -66,10 +103,14 @@ export default async function handler(req: any, res: any) {
         }
       }
 
-      if (captionText) {
+      const imageUrl = extractImageUrl(html);
+      const image = imageUrl ? await fetchImageAsDataUri(imageUrl) : '';
+
+      if (captionText || image) {
         return res.status(200).json({
-          success: true,
+          success: !!captionText,
           shortcode,
+          image,
           caption: captionText,
           authorName,
           url: rawUrl
