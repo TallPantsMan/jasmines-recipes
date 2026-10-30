@@ -5,6 +5,7 @@ import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
 import { stepTimerMinutes } from '../utils/stepTimer';
 import { nutritionBasis } from '../services/nutritionService';
+import { PROFILES } from '../services/profile';
 import { notify, askConfirm } from '../services/dialog';
 import {
   X, Heart, Star, Play, Plus, Trash2, Edit3,
@@ -14,6 +15,7 @@ import {
 interface RecipeDetailModalProps {
   recipe: Recipe;
   importedBy: string;
+  onSetImportedBy: (recipeId: string, name: string) => void;
   onClose: () => void;
   onEdit: (recipe: Recipe) => void;
   onDelete: (id: string) => void;
@@ -33,6 +35,7 @@ interface RecipeDetailModalProps {
 export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   recipe,
   importedBy,
+  onSetImportedBy,
   onClose,
   onEdit,
   onDelete,
@@ -311,7 +314,17 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                   </div>
                 )}
 
-                <div className="mt-1 text-xs text-[#7D7366] font-medium">Added by <span className="font-bold text-[#221E1B]">{importedBy}</span></div>
+                <label className="mt-1 text-xs text-[#7D7366] font-medium flex items-center gap-1.5">
+                  <span>Added by</span>
+                  <select
+                    value={importedBy}
+                    onChange={(e) => onSetImportedBy(recipe.id, e.target.value)}
+                    title="Not right? Pick who really added it"
+                    className="font-bold text-[#221E1B] bg-transparent border-b border-dashed border-[#CFC4B4] focus:outline-none cursor-pointer"
+                  >
+                    {PROFILES.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </label>
 
                 {recipe.description && (
                   <p className="mt-2.5 text-xs sm:text-sm text-[#544C42] leading-relaxed">

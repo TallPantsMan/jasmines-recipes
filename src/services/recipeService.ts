@@ -222,6 +222,21 @@ export const RecipeService = {
     } catch {}
   },
 
+  async setImportedBy(id: string, importedBy: string): Promise<void> {
+    const updatedAt = new Date().toISOString();
+    const current = loadFromLocalStorage() || [];
+    const match = current.find(r => r.id === id);
+    if (match) {
+      match.importedBy = importedBy;
+      match.updatedAt = updatedAt;
+      saveToLocalStorage(current);
+    }
+
+    try {
+      await db.recipes.update(id, { importedBy, updatedAt });
+    } catch {}
+  },
+
   async setNutrition(id: string, nutrition: Nutrition): Promise<void> {
     const updatedAt = new Date().toISOString();
     const current = loadFromLocalStorage() || [];

@@ -206,6 +206,12 @@ export function App({ profile }: { profile: ProfileName }) {
     return true;
   };
 
+  const handleSetImportedBy = async (id: string, importedBy: string) => {
+    await RecipeService.setImportedBy(id, importedBy);
+    setRecipes(prev => prev.map(r => r.id === id ? { ...r, importedBy } : r));
+    setActiveRecipe(prev => (prev && prev.id === id ? { ...prev, importedBy } : prev));
+  };
+
   const handleDeleteFolder = async (name: string) => {
     if (!(await askConfirm(`Delete the folder "${name}"? The recipes inside stay in your box, they just leave this folder.`, 'Delete folder'))) return;
     for (const r of recipes) {
@@ -593,6 +599,7 @@ export function App({ profile }: { profile: ProfileName }) {
         <RecipeDetailModal
           recipe={activeRecipe}
           importedBy={activeRecipe.importedBy || profile}
+          onSetImportedBy={handleSetImportedBy}
           onClose={() => setActiveRecipe(null)}
           onEdit={(r) => {
             setEditingRecipe(r);
