@@ -10,7 +10,6 @@ import {
   X, Globe, BookOpen, PenTool, Sparkles,
   Camera, ImagePlus, Loader2, Bookmark, ExternalLink
 } from 'lucide-react';
-import { InstagramIcon } from './Icons';
 
 interface AddRecipeModalProps {
   initialRecipe?: Recipe;
@@ -20,7 +19,7 @@ interface AddRecipeModalProps {
   onPasteRecipeCode?: (text: string) => Promise<boolean>;
 }
 
-type IntakeTab = 'website' | 'instagram' | 'cookbook' | 'manual';
+type IntakeTab = 'website' | 'cookbook' | 'manual';
 
 export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   initialRecipe,
@@ -30,8 +29,9 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 }) => {
   const getInitialTab = (): IntakeTab => {
     if (!initialRecipe) return 'website';
-    if (initialRecipe.sourceType === 'family' || initialRecipe.sourceType === 'manual') return 'manual';
-    return initialRecipe.sourceType as IntakeTab;
+    if (initialRecipe.sourceType === 'cookbook') return 'cookbook';
+    if (initialRecipe.sourceType === 'website' || initialRecipe.sourceType === 'instagram') return 'website';
+    return 'manual';
   };
 
   const [activeTab, setActiveTab] = useState<IntakeTab>(getInitialTab());
@@ -103,7 +103,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     const noIngredients = !parsed.ingredients || parsed.ingredients.length === 0;
     const noSteps = !parsed.instructions || parsed.instructions.length === 0;
     if (noIngredients && noSteps) {
-      setImportNotice("We found the title and photo, but couldn't find the ingredients or steps. They may be in the original post's comments or on the website. Paste them below, or use the Instagram/Text tab.");
+      setImportNotice("We found the title and photo, but couldn't find the ingredients or steps. They may be in the original post's comments or on the website. Paste them into the text box on the first tab.");
     } else if (noSteps) {
       setImportNotice("Imported! This post lists ingredients but no cooking steps, so add the directions below. Any tips from the post are in the description.");
     } else if (noIngredients) {
@@ -132,9 +132,9 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       targetUrl = 'https://' + targetUrl;
     }
 
-    // Auto-detect Instagram link pasted into website tab
+    // Instagram links use the caption puller instead of the page scraper
     if (targetUrl.includes('instagram.com')) {
-      setActiveTab('instagram');
+      setScrapeError('');
       setInstagramUrl(targetUrl);
       handlePullInstagram(targetUrl);
       return;
@@ -142,6 +142,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 
     setIsScraping(true);
     setScrapeError('');
+    setInstagramError(null);
 
     try {
       const html = await fetchPageHtml(targetUrl);
@@ -155,8 +156,9 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       }
     } catch {
       setScrapeError(
-        'Could not auto-scrape this page (some food blogs block proxies). You can paste the recipe text in the Instagram/Text tab!'
+        'Could not auto-scrape this page (some food blogs block proxies). You can paste the recipe text in the box below!'
       );
+      setShowManualCaptionFallback(true);
     } finally {
       setIsScraping(false);
     }
@@ -370,7 +372,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
               {initialRecipe ? 'Edit Recipe' : 'Import New Recipe'}
             </h2>
             <p className="text-xs text-[#82786D] mt-0.5 font-medium">
-              Save from websites, Instagram reels, or scan cookbooks
+              Save from Instagram, websites, pasted text, or scan cookbooks
             </p>
           </div>
           <button
@@ -392,19 +394,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
             }`}
           >
             <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FF5B26]" />
-            <span>Website Link</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('instagram')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              activeTab === 'instagram'
-                ? 'bg-[#FDFBF7] text-[#E1306C] shadow-xs'
-                : 'text-[#6E6457] hover:text-[#221E1B]'
-            }`}
-          >
-            <InstagramIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E1306C]" />
-            <span>Instagram / Text</span>
+            <span className="whitespace-nowrap">Instagram / Web Site / Text</span>
           </button>
 
           <button
@@ -443,10 +433,10 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                   <Globe className="w-6 h-6 stroke-[2.2]" />
                 </div>
                 <h3 className="font-serif text-lg font-bold text-[#221E1B]">
-                  Paste Any Recipe Link
+                  Paste a Recipe Link or Text
                 </h3>
                 <p className="text-xs text-[#7A7165]">
-                  Supports NYT Cooking, Half Baked Harvest, Allrecipes, Sally's Baking Addiction, and thousands more.
+                  Works with Instagram reels and posts, NYT Cooking, Half Baked Harvest, Allrecipes, and thousands more.
                   Got a recipe sent from Alex? Paste the whole message here.
                 </p>
               </div>
@@ -459,7 +449,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                   autoCorrect="off"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="https://www.halfbakedharvest.com/..."
+                  placeholder="https://www.instagram.com/reel/... or any recipe website"
                   required
                   className="w-full px-4 py-3.5 rounded-2xl border border-[#E8DFC9] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5B26]/20 focus:border-[#FF5B26] text-[#221E1B]"
                 />
@@ -472,13 +462,13 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 
                 <button
                   type="submit"
-                  disabled={isScraping || !urlInput.trim()}
+                  disabled={isScraping || isPullingInstagram || !urlInput.trim()}
                   className="w-full py-3.5 px-4 rounded-2xl bg-[#FF5B26] hover:bg-[#E84D1B] disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#FF5B26]/25 transition-all cursor-pointer"
                 >
-                  {isScraping ? (
+                  {isScraping || isPullingInstagram ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Extracting Ingredients & Steps...</span>
+                      <span>{isPullingInstagram ? 'Pulling Caption...' : 'Extracting Ingredients & Steps...'}</span>
                     </>
                   ) : (
                     <>
@@ -488,81 +478,29 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                   )}
                 </button>
               </form>
-            </div>
-          )}
 
-          {/* TAB 2: INSTAGRAM LINK OR CAPTION */}
-          {activeTab === 'instagram' && (
-            <div className="space-y-4 max-w-xl mx-auto py-2 sm:py-4">
-              <div className="text-center space-y-1.5 mb-4">
-                <div className="w-12 h-12 rounded-3xl bg-pink-50 text-[#E1306C] flex items-center justify-center mx-auto shadow-xs">
-                  <InstagramIcon className="w-6 h-6" />
+              {instagramError && (
+                <div className="p-3.5 bg-amber-50 text-amber-900 text-xs rounded-2xl border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                  <span className="leading-relaxed">{instagramError}</span>
+                  {instagramUrl && (
+                    <a
+                      href={instagramUrl.startsWith('http') ? instagramUrl : `https://${instagramUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-bold text-[#E1306C] hover:underline whitespace-nowrap shrink-0"
+                    >
+                      <span>Open Reel</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
                 </div>
-                <h3 className="font-serif text-lg sm:text-xl font-bold text-[#221E1B]">
-                  Import from Instagram Reel or Post
-                </h3>
-                <p className="text-xs text-[#7A7165] max-w-md mx-auto">
-                  Paste any Instagram Reel or post link below to pull the recipe directly from the caption.
-                </p>
-              </div>
-
-              {/* Primary Link Input & Puller */}
-              <div className="space-y-3 p-4 sm:p-5 bg-white rounded-3xl border border-[#EFE7DE] shadow-xs">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#665D52]">
-                  Instagram Reel / Post Link
-                </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={instagramUrl}
-                    onChange={(e) => setInstagramUrl(e.target.value)}
-                    placeholder="https://www.instagram.com/reel/C... or p/..."
-                    className="flex-1 px-4 py-3 rounded-2xl border border-[#E8DFC9] bg-[#FDFBF7] text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-[#E1306C] text-[#221E1B]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handlePullInstagram()}
-                    disabled={isPullingInstagram || !instagramUrl.trim()}
-                    className="py-3 px-5 rounded-2xl bg-gradient-to-r from-[#E1306C] to-[#FF5B26] hover:opacity-95 disabled:opacity-50 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-pink-600/20 transition-all cursor-pointer whitespace-nowrap"
-                  >
-                    {isPullingInstagram ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Pulling Caption...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        <span>Pull from Caption</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {instagramError && (
-                  <div className="p-3.5 bg-amber-50 text-amber-900 text-xs rounded-2xl border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-                    <span className="leading-relaxed">{instagramError}</span>
-                    {instagramUrl && (
-                      <a
-                        href={instagramUrl.startsWith('http') ? instagramUrl : `https://${instagramUrl}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 font-bold text-[#E1306C] hover:underline whitespace-nowrap shrink-0"
-                      >
-                        <span>Open Reel</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-
+              )}
               {/* Manual Caption Paste Accordion / Fallback */}
               <div className="p-4 sm:p-5 bg-white rounded-3xl border border-[#EFE7DE] shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-[#221E1B]">
-                      {showManualCaptionFallback ? 'Paste Caption Text:' : 'Or Paste Caption Text Manually'}
+                      {showManualCaptionFallback ? 'Paste Recipe Text:' : 'Or Paste Recipe Text Instead'}
                     </span>
                     <p className="text-[11px] text-[#7A7165]">
                       Copy-paste the caption text from Instagram, TikTok, or messages
