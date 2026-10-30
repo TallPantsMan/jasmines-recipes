@@ -35,6 +35,23 @@ async function fetchImageAsDataUri(url: string): Promise<string> {
     return '';
   }
 }
+function cleanHtmlCaption(rawHtml: string): string {
+  return rawHtml
+    .replace(/<br\s*[\/]?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .trim();
+}
+
 export default async function handler(req: any, res: any) {
   // CORS configuration
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -80,7 +97,7 @@ export default async function handler(req: any, res: any) {
       // 1. Look for div.Caption
       const captionMatch = html.match(/class="Caption"[^>]*>([\s\S]*?)<\/div>/i);
       if (captionMatch) {
-        captionText = captionMatch[1].replace(/<[^>]+>/g, '').trim();
+        captionText = cleanHtmlCaption(captionMatch[1]);
       }
 
       // 2. Look for script JSON
