@@ -1,7 +1,7 @@
 import React from 'react';
 import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe } from '../types/recipe';
-import { Heart, Clock, BookOpen, Globe, MessageSquare, Star, Utensils, Bookmark } from 'lucide-react';
+import { Heart, Clock, BookOpen, Globe, MessageSquare, Star, Utensils, Bookmark, Send } from 'lucide-react';
 import { InstagramIcon } from './Icons';
 
 interface RecipeCardProps {
@@ -9,13 +9,15 @@ interface RecipeCardProps {
   onSelect: (recipe: Recipe) => void;
   onToggleFavorite: (e: React.MouseEvent, id: string) => void;
   onToggleWantToTry: (e: React.MouseEvent, id: string) => void;
+  onSend: (recipe: Recipe) => void;
 }
 
 export const RecipeCard: React.FC<RecipeCardProps> = ({
   recipe,
   onSelect,
   onToggleFavorite,
-  onToggleWantToTry
+  onToggleWantToTry,
+  onSend
 }) => {
   const getSourceBadge = () => {
     switch (recipe.sourceType) {
@@ -158,6 +160,18 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
               </span>
             )}
             <span className="font-medium text-[#82786D]">{recipe.ingredients.length} items</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSend(recipe);
+              }}
+              className="flex items-center gap-1 font-bold text-[#FF5B26] hover:text-[#E84D1B] transition-colors cursor-pointer"
+              title="Send this recipe to Jasmine"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Send
+            </button>
           </div>
 
           <div className="flex items-center gap-2">

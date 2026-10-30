@@ -4,6 +4,10 @@ import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { signOut } from './services/auth';
 import { backupRecipe, backupAll, flushBackupQueue } from './services/backupService';
+import {
+  sendRecipe, shareApp, readIncomingRecipe, hasIncomingLink, clearIncomingLink, type ShareOutcome
+} from './services/shareService';
+import { ReceivedRecipeModal } from './components/ReceivedRecipeModal';
 import { Navbar } from './components/Navbar';
 import { CategoryFilterBar } from './components/CategoryFilterBar';
 import { RecipeCard } from './components/RecipeCard';
@@ -19,6 +23,8 @@ export function App() {
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('All');
   const [isLoading, setIsLoading] = useState(true);
   const [backupStatus, setBackupStatus] = useState('');
+  const [toast, setToast] = useState('');
+  const [incomingRecipe, setIncomingRecipe] = useState<Recipe | null>(null);
 
   // Modals
   const [activeRecipe, setActiveRecipe] = useState<Recipe | null>(null);
@@ -245,6 +251,63 @@ export function App() {
     void flushBackupQueue();
   }, []);
 
+  const showToast = (message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(''), 3500);
+  };
+
+  const reportShare = (outcome: ShareOutcome, copiedMessage: string) => {
+    if (outcome === 'copied') showToast(copiedMessage);
+    else if (outcome === 'failed') showToast("Couldn't share from this browser. Try again from your phone.");
+  };
+
+  const handleSendRecipe = async (recipe: Recipe) => {
+    reportShare(await sendRecipe(recipe), 'Link copied. Paste it in a message to Jasmine.');
+  };
+
+  const handleShareApp = async () => {
+    reportShare(await shareApp(), 'App link copied.');
+  };
+
+  // Someone opened a "send" link: offer to save that recipe
+  const openIncomingLink = async () => {
+    if (!hasIncomingLink()) return;
+    const recipe = await readIncomingRecipe();
+    if (recipe) setIncomingRecipe(recipe);
+    else {
+      clearIncomingLink();
+      showToast("That recipe link didn't work. Ask for it to be sent again.");
+    }
+  };
+
+  useEffect(() => {
+    void openIncomingLink();
+    window.addEventListener('hashchange', openIncomingLink);
+    return () => window.removeEventListener('hashchange', openIncomingLink);
+  }, []);
+
+  const handleSaveIncoming = async () => {
+    if (!incomingRecipe) return;
+    const saved = incomingRecipe;
+    setIncomingRecipe(null);
+    clearIncomingLink();
+    await handleSaveRecipe(saved);
+    showToast(`Saved "${saved.title}" to your recipes`);
+  };
+
+  const dismissIncoming = () => {
+    setIncomingRecipe(null);
+    clearIncomingLink();
+  };
+
+  const alreadyHaveIncoming =
+    !!incomingRecipe &&
+    recipes.some(
+      (r) =>
+        (incomingRecipe.sourceUrl && r.sourceUrl === incomingRecipe.sourceUrl) ||
+        r.title.trim().toLowerCase() === incomingRecipe.title.trim().toLowerCase()
+    );
+
   const handleBackupNow = async () => {
     setBackupStatus('Backing up…');
     const result = await backupAll(recipes);
@@ -385,6 +448,7 @@ export function App() {
                 onSelect={(r) => setActiveRecipe(r)}
                 onToggleFavorite={handleToggleFavorite}
                 onToggleWantToTry={handleToggleWantToTry}
+                onSend={handleSendRecipe}
               />
             ))}
           </div>
@@ -432,13 +496,13 @@ export function App() {
       {/* ReciMe Footer */}
       <footer className="border-t border-[#F2ECE3] py-6 text-center text-xs text-[#857B6E]">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>
-            Crafted for <strong className="font-serif font-bold text-[#221E1B]">Jasmine</strong> • 100% Free Kitchen Box
+          <p className="font-serif font-bold text-[#221E1B]">
+            For Jasmine, Love Alex
           </p>
           <div className="flex items-center gap-3 text-[11px] font-semibold text-[#A09587]">
             <span>📱 Add to Home Screen</span>
             <span>•</span>
-            <span>Landscape & Portrait Ready</span>
+            <button onClick={handleShareApp} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Share app</button>
             <span>•</span>
             <button
               onClick={handleBackupNow}
@@ -452,6 +516,24 @@ export function App() {
           </div>
         </div>
       </footer>
+
+      {incomingRecipe && (
+        <ReceivedRecipeModal
+          recipe={incomingRecipe}
+          alreadyHave={alreadyHaveIncoming}
+          onSave={handleSaveIncoming}
+          onDismiss={dismissIncoming}
+        />
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          className="fixed left-1/2 -translate-x-1/2 bottom-6 z-[70] max-w-[90vw] px-4 py-3 rounded-2xl bg-[#221E1B] text-white text-xs font-semibold shadow-xl"
+        >
+          {toast}
+        </div>
+      )}
 
       {/* Detail View Modal */}
       {activeRecipe && (
