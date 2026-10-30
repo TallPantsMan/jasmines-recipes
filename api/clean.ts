@@ -5,24 +5,27 @@
 const MAX_INPUT = 12000;
 const API = 'https://generativelanguage.googleapis.com/v1beta';
 
-// Model names get retired, so when the configured one isn't found we ask Google which fast models exist
-// and use the newest. Remembered while this server instance stays warm.
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
+
+// Model names change, so when the configured one isn't found we ask Google which light, fast models exist
+// and use the newest (preferring Flash-Lite). Remembered while this server instance stays warm.
 let discoveredModel = '';
 
 async function pickModel(key: string): Promise<string> {
   const r = await fetch(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error(`Could not list AI models (${r.status})`);
   const data: any = await r.json();
-  const candidates = (data.models || [])
+  const names: string[] = (data.models || [])
     .filter((m: any) => (m.supportedGenerationMethods || []).includes('generateContent'))
-    .map((m: any) => String(m.name).replace(/^models\//, ''))
-    .filter((n: string) => /^gemini-[\d.]+-flash(-\d+)?$/.test(n));
+    .map((m: any) => String(m.name).replace(/^models\//, ''));
   const version = (n: string) => parseFloat(n.match(/^gemini-([\d.]+)/)?.[1] || '0');
-  candidates.sort((a: string, b: string) => version(b) - version(a));
-  if (!candidates[0]) throw new Error('No suitable AI model is available for this key');
-  return candidates[0];
+  const newest = (list: string[]) => list.sort((a, b) => version(b) - version(a))[0];
+  const lite = newest(names.filter((n) => /^gemini-[\d.]+-flash-lite(-preview[\w-]*)?$/.test(n)));
+  const flash = newest(names.filter((n) => /^gemini-[\d.]+-flash(-\d+)?$/.test(n)));
+  const pick = lite || flash;
+  if (!pick) throw new Error('No suitable AI model is available for this key');
+  return pick;
 }
-
 const INSTRUCTIONS = `You turn messy recipe text (social media captions, pasted notes, text read from a cookbook photo) into a clean recipe.
 Rules:
 - Use ONLY what the text says. Never invent ingredients, amounts, steps or times. If something is missing, leave it empty or 0.
@@ -93,7 +96,13 @@ export default async function handler(req: any, res: any) {
   };
 
   try {
-    let r = await call(process.env.GEMINI_MODEL || discoveredModel || 'gemini-2.5-flash');
+    const model = process.env.GEMINI_MODEL || discoveredModel || DEFAULT_MODEL;
+    let r = await call(model);
+    // A busy moment on the free tier usually clears within a couple of seconds
+    if (r.status === 503) {
+      await new Promise((ok) => setTimeout(ok, 1500));
+      r = await call(model);
+    }
     if (r.status === 404 && !process.env.GEMINI_MODEL) {
       discoveredModel = await pickModel(key);
       r = await call(discoveredModel);
@@ -111,3 +120,4 @@ export default async function handler(req: any, res: any) {
     return res.status(502).json({ error: err?.message || 'AI clean-up failed' });
   }
 }
+
