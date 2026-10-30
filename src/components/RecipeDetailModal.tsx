@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe, JasmineNote } from '../types/recipe';
 import {
   X, Heart, Star, Play, Plus, Trash2, Edit3,
-  ExternalLink, Camera, Check, Timer, Utensils, MessageSquare, Bookmark
+  ExternalLink, Camera, Check, Timer, MessageSquare, Bookmark
 } from 'lucide-react';
 
 interface RecipeDetailModalProps {
@@ -107,12 +108,12 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 landscape:p-2 sm:landscape:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-stretch sm:items-center justify-center p-0 sm:p-4 landscape:p-2 sm:landscape:p-4 animate-in fade-in duration-200">
       
-      <div className="bg-[#FDFBF7] w-full max-w-5xl min-h-screen sm:min-h-fit sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[100dvh] sm:max-h-[94vh] border border-[#EFE7DE]">
+      <div className="bg-[#FDFBF7] w-full max-w-5xl h-[100dvh] sm:h-auto sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col sm:max-h-[94vh] border border-[#EFE7DE]">
         
         {/* ReciMe Styled Top Bar */}
-        <div className="sticky top-0 z-20 bg-[#FDFBF7]/95 backdrop-blur-md px-4 sm:px-6 py-3 border-b border-[#F0E8DC] flex items-center justify-between">
+        <div style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }} className="shrink-0 sticky top-0 z-20 bg-[#FDFBF7]/95 backdrop-blur-md px-4 sm:px-6 pb-3 border-b border-[#F0E8DC] flex items-center justify-between">
           <div className="flex items-center gap-2">
             {/* Want to Try Bookmark Button */}
             <button
@@ -185,7 +186,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
         </div>
 
         {/* Scrollable Body: Dual columns in Landscape, stacked in Portrait */}
-        <div className="overflow-y-auto flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
+        <div style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }} className="overflow-y-auto overscroll-contain flex-1 min-h-0 p-4 sm:p-6 lg:p-8 space-y-6">
           
           {/* Active Kitchen Timer */}
           {activeTimerMinutes !== null && (
@@ -226,18 +227,12 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
               
               {/* Hero Image */}
               <div className="relative rounded-[24px] overflow-hidden aspect-[4/3] bg-[#F5EFE7] shadow-sm">
-                {recipe.coverImage ? (
-                  <img
-                    src={recipe.coverImage}
-                    alt={recipe.title}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-[#B5ABA0] gap-2">
-                    <Utensils className="w-10 h-10 stroke-[1.5]" />
-                    <span className="text-xs font-semibold">No cover photo</span>
-                  </div>
-                )}
+                <img
+                  src={recipeImageSrc(recipe)}
+                  alt={recipe.title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { const fb = generatedCover(recipe); if (e.currentTarget.src !== fb) e.currentTarget.src = fb; }}
+                />
                 <div className="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/95 text-[#221E1B] shadow-sm backdrop-blur-md">
                   {recipe.sourceType}
                 </div>
