@@ -412,7 +412,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                           className="absolute top-1.5 right-1.5 p-1 bg-black/60 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                           title="Remove photo"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-3 3" />
                         </button>
                       </div>
                     ))}

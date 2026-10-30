@@ -1,0 +1,10 @@
+# GitHub Pages deployment is permanently disabled to prevent collision with caulhaus.com
+# Jasmine's Recipes is hosted permanently on Vercel: https://jasmines-recipes.vercel.app
+name: No-op
+on:
+  workflow_dispatch:
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deployment handled by Vercel."

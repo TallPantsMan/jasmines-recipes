@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../types/recipe';
 import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl } from '../services/recipeParser';
 import { processCookbookImage, type OcrProgress } from '../services/ocrService';
@@ -525,7 +525,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                       rows={5}
                       value={pastedText}
                       onChange={(e) => setPastedText(e.target.value)}
-                      placeholder={`Paste caption text here...\n\nExample:\nCreamy Garlic Pasta\nIngredients:\n1 lb pasta\n4 cloves garlic\n1/2 cup parmesan\n\nDirections:\n1. Boil pasta\n2. Sauté garlic...`}
+                      placeholder={`Paste caption text here...\n\nExample:\nCreamy Garlic Pasta\nIngredients:\n1 lb pasta\n4 cloves garlic\n1/2 cup parmesan\n\nDirections:\n1. Boil pasta\n2. SautÃ© garlic...`}
                       className="w-full px-4 py-3 rounded-2xl border border-[#E8DFC9] bg-[#FDFBF7] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-pink-500/20 leading-relaxed text-[#221E1B]"
                     />
 
@@ -789,7 +789,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                     required
                     value={instructionsText}
                     onChange={(e) => setInstructionsText(e.target.value)}
-                    placeholder={`Boil salted water and cook pasta al dente.\nSauté garlic in olive oil.\nToss pasta with sauce.`}
+                    placeholder={`Boil salted water and cook pasta al dente.\nSautÃ© garlic in olive oil.\nToss pasta with sauce.`}
                     className="w-full px-3.5 py-2.5 rounded-2xl border border-[#E8DFC9] bg-white text-xs font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#FF5B26]/20"
                   />
                 </div>
