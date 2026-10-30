@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { fetchInstagramCover } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
+import { signOut } from './services/auth';
 import { Navbar } from './components/Navbar';
 import { CategoryFilterBar } from './components/CategoryFilterBar';
 import { RecipeCard } from './components/RecipeCard';
@@ -422,6 +423,8 @@ export function App() {
             <span>📱 Add to Home Screen</span>
             <span>•</span>
             <span>Landscape & Portrait Ready</span>
+            <span>•</span>
+            <button onClick={signOut} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Sign out</button>
           </div>
         </div>
       </footer>

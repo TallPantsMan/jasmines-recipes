@@ -3,12 +3,25 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import instagramHandler from './api/instagram.js';
 import pageHandler from './api/page.js';
+import loginHandler from './api/login.js';
 
 // While developing locally, run the very same serverless functions that ship in /api
 const API_ROUTES: Record<string, (req: any, res: any) => Promise<unknown>> = {
   '/api/instagram': instagramHandler,
   '/api/page': pageHandler,
+  '/api/login': loginHandler,
 };
+
+async function readJsonBody(req: any): Promise<unknown> {
+  if (req.method !== 'POST') return {};
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk);
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+  } catch {
+    return {};
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -46,7 +59,8 @@ export default defineConfig({
           };
 
           try {
-            await handler({ method: req.method, query: Object.fromEntries(url.searchParams), body: {} }, shim);
+            const body = await readJsonBody(req);
+            await handler({ method: req.method, query: Object.fromEntries(url.searchParams), body, headers: req.headers }, shim);
           } catch (err: any) {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');

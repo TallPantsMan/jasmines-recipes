@@ -1,3 +1,5 @@
+import { requireLogin } from './_auth.js';
+
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1';
 
@@ -138,14 +140,8 @@ async function resolveShortcode(rawUrl: string): Promise<string | null> {
 }
 
 export default async function handler(req: any, res: any) {
-  // CORS configuration
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  // Only the app itself (same address) calls this, and only once signed in
+  if (!requireLogin(req, res)) return;
 
   const rawUrl = req.query?.url || req.body?.url;
   if (!rawUrl) {

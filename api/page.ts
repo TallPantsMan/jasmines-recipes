@@ -1,3 +1,5 @@
+import { requireLogin } from './_auth.js';
+
 const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
@@ -17,9 +19,7 @@ function isBlockedHost(hostname: string): boolean {
 
 // Fetches a recipe web page on the server (no browser CORS limits) and returns its HTML.
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (!requireLogin(req, res)) return;
 
   const raw = req.query?.url;
   let target: URL;

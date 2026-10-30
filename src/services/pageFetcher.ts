@@ -3,13 +3,16 @@
  * serverless route first, then a few free public proxies, so one flaky proxy no longer breaks every import.
  */
 
+import { apiFetch } from './auth';
+
 const TIMEOUT_MS = 12000;
 
 async function getText(url: string, expectJson = false): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    // Only our own route gets the sign-in token; the public proxies must never see it
+    const res = await (url.startsWith('/api/') ? apiFetch : fetch)(url, { signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     if (expectJson) {
       // Without our server route the dev server answers with the app's own page, which must not count as success

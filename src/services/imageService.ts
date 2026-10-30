@@ -1,4 +1,5 @@
 import type { Recipe } from '../types/recipe';
+import { apiFetch } from './auth';
 
 /** Downscale + re-encode an image data URL so it stays small enough to persist. */
 export function compressImageDataUrl(dataUrl: string, maxWidth = 900, quality = 0.8): Promise<string> {
@@ -51,7 +52,7 @@ async function fetchInstagramCoverUnsafe(targetUrl: string, apiImage?: string): 
     if (c) return c;
   }
   try {
-    const res = await fetch(`/api/instagram?url=${encodeURIComponent(targetUrl)}`);
+    const res = await apiFetch(`/api/instagram?url=${encodeURIComponent(targetUrl)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.image && String(data.image).startsWith('data:image')) {

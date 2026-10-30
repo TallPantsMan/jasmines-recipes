@@ -2,6 +2,7 @@ import type { Recipe, Ingredient, InstructionStep } from '../types/recipe';
 import { parseRawRecipeText, inferCategories } from './captionParser';
 import { fetchInstagramCover } from './imageService';
 import { fetchPageHtml } from './pageFetcher';
+import { apiFetch } from './auth';
 
 /**
  * Converts a recipe duration into minutes. Handles ISO 8601 ("PT25M", "PT1H15M", "PT01H15M",
@@ -346,7 +347,7 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
 
   // 3. Our serverless endpoint /api/instagram
   try {
-    const apiRes = await fetch(`/api/instagram?url=${encodeURIComponent(targetUrl)}`);
+    const apiRes = await apiFetch(`/api/instagram?url=${encodeURIComponent(targetUrl)}`);
     if (apiRes.ok) {
       const data = await apiRes.json();
       if (data.caption && data.caption.length > 10) {
