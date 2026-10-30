@@ -6,6 +6,7 @@ import pageHandler from './api/page.js';
 import loginHandler from './api/login.js';
 import cleanHandler from './api/clean.js';
 import backupHandler from './api/backup.js';
+import shareHandler from './api/share.js';
 
 // While developing locally, run the very same serverless functions that ship in /api
 const API_ROUTES: Record<string, (req: any, res: any) => Promise<unknown>> = {
@@ -14,6 +15,7 @@ const API_ROUTES: Record<string, (req: any, res: any) => Promise<unknown>> = {
   '/api/login': loginHandler,
   '/api/clean': cleanHandler,
   '/api/backup': backupHandler,
+  '/api/share': shareHandler,
 };
 
 async function readJsonBody(req: any): Promise<unknown> {

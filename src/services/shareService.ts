@@ -1,4 +1,5 @@
 ﻿import type { Recipe, RecipeSourceType } from '../types/recipe';
+import { apiFetch } from './auth';
 
 /**
  * Sending a recipe turns the whole recipe into a code (squeezed small), so there is no server or account in between.
@@ -134,15 +135,15 @@ export async function buildRecipeCode(r: Recipe): Promise<string> {
   return `${CODE_PREFIX}${await pack(recipeToPayload(r))}`;
 }
 
-export const looksLikeRecipeCode = (text: string): boolean => text.includes(CODE_PREFIX);
+// Short codes (JR-K7F3QZ) are looked up on the server; the long code carries the whole recipe and needs no lookup
+const SHORT_CODE = /\bJR-[2-9A-HJ-NP-Z]{6}\b/i;
 
-/**
- * The recipe inside a pasted code. The code can be pasted on its own or inside the whole message it arrived in,
- * and some chat apps add line breaks to long text, so a code that was split across lines is joined back up.
- */
-export async function recipeFromCode(text: string): Promise<Recipe | null> {
+export const looksLikeRecipeCode = (text: string): boolean => text.includes(CODE_PREFIX) || SHORT_CODE.test(text);
+
+async function recipeFromLongCode(text: string): Promise<Recipe | null> {
   const at = text.indexOf(CODE_PREFIX);
   if (at < 0) return null;
+  // Some chat apps add line breaks to long text, so a code split across lines is joined back up
   const after = text.slice(at + CODE_PREFIX.length);
   const attempts = [after.match(/^[A-Za-z0-9_\-\s]+/)?.[0].replace(/\s+/g, ''), after.match(/^[A-Za-z0-9_-]+/)?.[0]];
   for (const code of attempts) {
@@ -155,6 +156,24 @@ export async function recipeFromCode(text: string): Promise<Recipe | null> {
     }
   }
   return null;
+}
+
+async function recipeFromShortCode(text: string): Promise<Recipe | null> {
+  const code = text.match(SHORT_CODE)?.[0].toUpperCase();
+  if (!code) return null;
+  try {
+    const res = await apiFetch(`/api/share?code=${encodeURIComponent(code)}`);
+    if (!res.ok) return null;
+    const { payload } = await res.json();
+    return typeof payload === 'string' ? payloadToRecipe(await unpack(payload)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The recipe inside a pasted code, whether it was pasted on its own or inside the whole message it arrived in. */
+export async function recipeFromCode(text: string): Promise<Recipe | null> {
+  return (await recipeFromLongCode(text)) ?? (await recipeFromShortCode(text));
 }
 export type ShareOutcome = 'shared' | 'copied' | 'failed' | 'cancelled';
 
@@ -175,15 +194,35 @@ async function shareOrCopy(data: { title: string; text: string; url?: string }):
   }
 }
 
+/** A short code kept on the server, or null when that isn't available right now. */
+async function shortCodeFor(r: Recipe): Promise<string | null> {
+  try {
+    const res = await apiFetch('/api/share', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload: await pack(recipeToPayload(r)) }),
+    });
+    if (!res.ok) return null;
+    const { code } = await res.json();
+    return typeof code === 'string' && code ? code : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function sendRecipe(r: Recipe): Promise<ShareOutcome> {
-  const code = await buildRecipeCode(r);
+  // The short code is easy to read and type. If it can't be made (no signal, sharing not set up), the long code
+  // still works because it carries the whole recipe.
+  const short = await shortCodeFor(r);
+  const code = short ?? (await buildRecipeCode(r));
   const text =
     `Here's a recipe for you: ${r.title}\n\n` +
     `To save it: open Jasmine's Recipe Box, tap Import, and paste this whole message.\n\n` +
-    `Recipe code:\n${code}`;
+    `Recipe code: ${short ? code : '\n' + code}`;
   return shareOrCopy({ title: r.title, text });
 }
 export function shareApp(): Promise<ShareOutcome> {
   return shareOrCopy({ title: "Jasmine's Recipe Box", text: "Jasmine's Recipe Box", url: appAddress() });
 }
+
 
