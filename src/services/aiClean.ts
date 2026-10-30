@@ -22,6 +22,29 @@ const strings = (v: unknown): string[] =>
 
 const positive = (v: unknown): number | undefined => (typeof v === 'number' && v > 0 ? Math.round(v) : undefined);
 
+/** A recipe we already parsed (for example from a website) written out as plain text, so the AI can normalise it too. */
+function recipeToText(r: Partial<Recipe>): string {
+  const lines: string[] = [];
+  if (r.title) lines.push(`Title: ${r.title}`);
+  if (r.description) lines.push(`Description: ${r.description}`);
+  if (r.servings) lines.push(`Servings: ${r.servings}`);
+  if (r.prepTimeMinutes) lines.push(`Prep time: ${r.prepTimeMinutes} minutes`);
+  if (r.cookTimeMinutes) lines.push(`Cook time: ${r.cookTimeMinutes} minutes`);
+  if (r.categories?.length) lines.push(`Categories: ${r.categories.join(', ')}`);
+  if (r.tags?.length) lines.push(`Keywords: ${r.tags.join(', ')}`);
+  if (r.ingredients?.length) lines.push('', 'Ingredients:', ...r.ingredients.map((i) => `- ${i.raw}`));
+  if (r.instructions?.length) lines.push('', 'Instructions:', ...r.instructions.map((s, n) => `${n + 1}. ${s.text}`));
+  return lines.join('\n');
+}
+
+/** Same tidy-up for a recipe that was already pulled apart, e.g. from a website's recipe data. */
+export async function refineParsedRecipe<T extends Partial<Recipe>>(parsed: T): Promise<T> {
+  const text = recipeToText(parsed);
+  if (text.length < 40) return parsed;
+  const { creator: _creator, ...refined } = await refineWithAi(text, parsed);
+  return refined as unknown as T;
+}
+
 /**
  * Asks the server's AI to tidy a messy recipe. Anything the AI gets wrong or can't do falls back to what our own
  * parser already found, so a failure here only means "no extra polish", never a lost recipe.

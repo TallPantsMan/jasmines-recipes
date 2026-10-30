@@ -33,6 +33,7 @@ Rules:
 - description: one or two plain sentences (the hook, a tip, or a nutrition line if given). Empty if there is nothing useful.
 - ingredients: one string per ingredient, amount first, like "1 1/2 cups all-purpose flour". Split lines that hold several ingredients. Keep prep notes like ", diced".
 - steps: one string per cooking step, in order, in plain sentences, without "Step 1" numbering. Split long run-on paragraphs into sensible steps. Keep tips that belong to a step inside that step.
+- The text may already be organised (Title, Ingredients, Instructions from a website). Keep every real ingredient and step, but normalise the wording and layout the same way: plain steps without numbering or leftover web-page text, one clean ingredient per line, and a short plain description instead of marketing copy or the author's life story.
 - Ignore calls to action ("comment RECIPE", "follow me", "link in bio"), credits, hashtags and emoji decoration.
 - servings: a whole number, 0 if unknown.
 - prepMinutes and cookMinutes: whole minutes. Use the times the text states. If the text gives none, estimate them realistically from the ingredients and steps: prepMinutes is hands-on chopping, mixing and assembling; cookMinutes is time on the heat, in the oven, or chilling and setting. Use 0 only for a part that truly takes no time (for example a no-cook salad has cookMinutes 0).

@@ -4,7 +4,7 @@ import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl } 
 import { processCookbookImages, type OcrProgress } from '../services/ocrService';
 import { fileToCompressedDataUrl } from '../services/imageService';
 import { fetchPageHtml } from '../services/pageFetcher';
-import { refineWithAi } from '../services/aiClean';
+import { refineWithAi, refineParsedRecipe } from '../services/aiClean';
 import {
   X, Globe, BookOpen, PenTool, Sparkles,
   Camera, ImagePlus, Loader2, Bookmark, ExternalLink
@@ -137,7 +137,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       const parsed = parseRecipeFromHtml(html, targetUrl);
       if (parsed) {
         setSourceType('website');
-        applyParsedRecipe(parsed);
+        applyParsedRecipe(await refineParsedRecipe(parsed));
       } else {
         throw new Error('No structured recipe found on page.');
       }
