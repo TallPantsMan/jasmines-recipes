@@ -3,6 +3,7 @@ import type { Recipe } from '../types/recipe';
 import { X, ChevronLeft, ChevronRight, Check, ListFilter, Sun, Timer, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { formatMinutes } from '../utils/formatTime';
+import { scaleIngredient } from '../utils/scaleIngredient';
 
 interface CookModeModalProps {
   recipe: Recipe;
@@ -155,7 +156,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
                   }`}>
                     {checked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                   </div>
-                  <span className="font-medium leading-snug">{ing.raw}</span>
+                  <span className="font-medium leading-snug">{scaleIngredient(ing.raw, initialServings / (recipe.servings || initialServings))}</span>
                 </div>
               );
             })}
@@ -217,7 +218,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
                     }`}>
                       {checked && <Check className="w-3 h-3 stroke-[3]" />}
                     </div>
-                    <span className="text-sm font-medium">{ing.raw}</span>
+                    <span className="text-sm font-medium">{scaleIngredient(ing.raw, initialServings / (recipe.servings || initialServings))}</span>
                   </div>
                 );
               })}

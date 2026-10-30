@@ -378,13 +378,14 @@ export function parseRawRecipeText(text: string, titleHint?: string, options: Pa
 
     // "Prep: 10 min", "Cook time 15 min", or the "Serves 4 | Prep 10 min | Cook 15 min" strip.
     // A bare "Bake 10 minutes at 400F" is a cooking step, not a label, so cook/bake/total need a colon, the word "time", or the strip layout.
-    const rawTimes = [...plain.matchAll(/\b(prep(?:aration)?|cook(?:ing)?|total|bake|baking)(\s*time)?\s*([:\-–])?\s*(\d+(?:\.\d+)?)\s*(h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?)\b/gi)];
+    const rawTimes = [...plain.matchAll(/\b(prep(?:aration)?|cook(?:ing)?|total|bake|baking)(\s*time)?\s*([:\-–])?\s*(\d+(?:\.\d+)?)\s*(h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?)\b(?:\s*(?:and\s*)?(\d+)\s*(m(?:in(?:ute)?s?)?)\b)?/gi)];
     const isStrip = rawTimes.length >= 2 && /[|•·]/.test(plain);
     const timeMatches = rawTimes.filter((m) => !!(m[2] || m[3] || isStrip));
     const isTimeLine = timeMatches.length > 0 && plain.length < 100;
     if (isTimeLine) {
       timeMatches.forEach((m) => {
-        const mins = minutesFrom(m[4], m[5]);
+        // "1 hour 15 minutes": the minutes after the hours count too
+        const mins = minutesFrom(m[4], m[5]) + (m[6] && /^h/i.test(m[5]) ? minutesFrom(m[6], m[7]) : 0);
         if (/prep/i.test(m[1])) prep = prep || mins;
         else cook = cook || mins;
       });

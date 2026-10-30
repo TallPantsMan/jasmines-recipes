@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe, JasmineNote } from '../types/recipe';
 import { formatMinutes } from '../utils/formatTime';
+import { scaleIngredient } from '../utils/scaleIngredient';
 import {
   X, Heart, Star, Play, Plus, Trash2, Edit3,
   ExternalLink, Camera, Check, Timer, MessageSquare, Bookmark
@@ -481,7 +482,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         }`}>
                           {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
                         </div>
-                        <span className="font-medium leading-snug">{ing.raw}</span>
+                        <span className="font-medium leading-snug">{scaleIngredient(ing.raw, servings / (recipe.servings || servings))}</span>
                       </div>
                     );
                   })}

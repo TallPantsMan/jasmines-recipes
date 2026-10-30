@@ -201,12 +201,17 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const handleParseText = async () => {
     if (!pastedText.trim() || isTidyingText) return;
     setIsTidyingText(true);
-    const { creator, ...parsed } = await refineWithAi(pastedText, parseRawRecipeText(pastedText, pastedTitle));
+    // Only text that came from an Instagram post is treated as one; anything else is just a pasted recipe
+    const fromInstagram = /instagram\.com/i.test(`${instagramUrl} ${sourceUrl}`);
+    const { creator, ...parsed } = await refineWithAi(
+      pastedText,
+      parseRawRecipeText(pastedText, pastedTitle, { source: fromInstagram ? 'instagram' : 'text' })
+    );
     setIsTidyingText(false);
-    setSourceType('instagram');
+    setSourceType(fromInstagram ? 'instagram' : 'manual');
     applyParsedRecipe({
       ...parsed,
-      sourceName: sourceName || (creator ? `@${creator}` : 'Instagram Post'),
+      sourceName: sourceName || (creator ? `@${creator}` : fromInstagram ? 'Instagram Post' : 'Pasted recipe'),
       sourceUrl: sourceUrl || instagramUrl.trim() || undefined,
       coverImage: coverImage || undefined
     });
@@ -384,40 +389,43 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         </div>
 
         {/* Tab Selection */}
-        <div className="bg-[#F6EFE6] px-4 sm:px-6 pt-2.5 flex gap-2 border-b border-[#E8DFC9] overflow-x-auto no-scrollbar">
+        <div className="bg-[#F6EFE6] px-3 sm:px-6 pt-2.5 flex gap-1 sm:gap-2 border-b border-[#E8DFC9] overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('website')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-t-2xl text-[11px] sm:text-sm whitespace-nowrap font-bold transition-all cursor-pointer ${
               activeTab === 'website'
                 ? 'bg-[#FDFBF7] text-[#FF5B26] shadow-xs'
                 : 'text-[#6E6457] hover:text-[#221E1B]'
             }`}
           >
-            <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FF5B26]" />
-            <span className="whitespace-nowrap">Instagram / Web Site / Text</span>
+            <Globe className="hidden sm:block w-4 h-4 text-[#FF5B26]" />
+            <span>
+              <span className="sm:hidden">Instagram / Web / Text</span>
+              <span className="hidden sm:inline">Instagram / Web Site / Text</span>
+            </span>
           </button>
 
           <button
             onClick={() => setActiveTab('cookbook')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-t-2xl text-[11px] sm:text-sm whitespace-nowrap font-bold transition-all cursor-pointer ${
               activeTab === 'cookbook'
                 ? 'bg-[#FDFBF7] text-amber-800 shadow-xs'
                 : 'text-[#6E6457] hover:text-[#221E1B]'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700" />
+            <BookOpen className="hidden sm:block w-4 h-4 text-amber-700" />
             <span>Cookbook Scan</span>
           </button>
 
           <button
             onClick={() => setActiveTab('manual')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all ml-auto cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-t-2xl text-[11px] sm:text-sm whitespace-nowrap font-bold transition-all ml-auto cursor-pointer ${
               activeTab === 'manual'
                 ? 'bg-[#FDFBF7] text-[#221E1B] shadow-xs'
                 : 'text-[#6E6457] hover:text-[#221E1B]'
             }`}
           >
-            <PenTool className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#4B7D50]" />
+            <PenTool className="hidden sm:block w-4 h-4 text-[#4B7D50]" />
             <span>Edit Fields</span>
           </button>
         </div>
@@ -531,7 +539,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                       rows={5}
                       value={pastedText}
                       onChange={(e) => setPastedText(e.target.value)}
-                      placeholder={`Paste caption text here...\n\nExample:\nCreamy Garlic Pasta\nIngredients:\n1 lb pasta\n4 cloves garlic\n1/2 cup parmesan\n\nDirections:\n1. Boil pasta\n2. SautÃ© garlic...`}
+                      placeholder={`Paste caption text here...\n\nExample:\nCreamy Garlic Pasta\nIngredients:\n1 lb pasta\n4 cloves garlic\n1/2 cup parmesan\n\nDirections:\n1. Boil pasta\n2. Sauté garlic...`}
                       className="w-full px-4 py-3 rounded-2xl border border-[#E8DFC9] bg-[#FDFBF7] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-pink-500/20 leading-relaxed text-[#221E1B]"
                     />
 
@@ -859,7 +867,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                     required
                     value={instructionsText}
                     onChange={(e) => setInstructionsText(e.target.value)}
-                    placeholder={`Boil salted water and cook pasta al dente.\nSautÃ© garlic in olive oil.\nToss pasta with sauce.`}
+                    placeholder={`Boil salted water and cook pasta al dente.\nSauté garlic in olive oil.\nToss pasta with sauce.`}
                     className="w-full px-3.5 py-2.5 rounded-2xl border border-[#E8DFC9] bg-white text-xs font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#FF5B26]/20"
                   />
                 </div>

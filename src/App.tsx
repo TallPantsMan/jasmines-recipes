@@ -306,9 +306,9 @@ export function App() {
     );
 
   const handleBackupNow = async () => {
-    setBackupStatus('Backing upâ€¦');
+    setBackupStatus('Backing up…');
     const result = await backupAll(recipes);
-    setBackupStatus(result.ok ? `Backed up ${result.sent} âœ“` : 'Backup failed');
+    setBackupStatus(result.ok ? `Backed up ${result.sent} ✓` : 'Backup failed');
     if (!result.ok) alert(result.reason);
     setTimeout(() => setBackupStatus(''), 4000);
   };
@@ -490,18 +490,18 @@ export function App() {
             For Jasmine, Love Alex
           </p>
           <div className="flex items-center gap-3 text-[11px] font-semibold text-[#A09587]">
-            <span>ðŸ“± Add to Home Screen</span>
-            <span>â€¢</span>
+            <span>📱 Add to Home Screen</span>
+            <span>•</span>
             <button onClick={handleShareApp} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Share app</button>
-            <span>â€¢</span>
+            <span>•</span>
             <button
               onClick={handleBackupNow}
-              disabled={backupStatus === 'Backing upâ€¦'}
+              disabled={backupStatus === 'Backing up…'}
               className="hover:text-[#FF5B26] transition-colors cursor-pointer"
             >
               {backupStatus || 'Back up now'}
             </button>
-            <span>â€¢</span>
+            <span>•</span>
             <button onClick={signOut} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Sign out</button>
           </div>
         </div>
