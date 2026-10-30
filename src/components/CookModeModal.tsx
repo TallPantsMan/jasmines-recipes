@@ -169,7 +169,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
             <span>Step {currentStepIndex + 1} of {totalSteps}</span>
           </div>
 
-          <p className="font-serif text-xl sm:text-3xl lg:text-4xl landscape:text-2xl landscape:lg:text-4xl font-semibold leading-relaxed sm:leading-snug text-white/95 max-w-2xl">
+          <p className="font-serif text-xl sm:text-3xl lg:text-4xl landscape:text-2xl landscape:lg:text-4xl font-semibold leading-relaxed sm:leading-snug text-white/95 max-w-2xl whitespace-pre-line">
             {currentStep?.text}
           </p>
 
