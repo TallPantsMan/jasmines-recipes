@@ -1,59 +1,63 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { fetchInstagramCover } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { Navbar } from './components/Navbar';
 import { CategoryFilterBar } from './components/CategoryFilterBar';
 import { RecipeCard } from './components/RecipeCard';
 import { RecipeDetailModal } from './components/RecipeDetailModal';
-import { CookModeModal } from './components/CookModeModal';
 import { AddRecipeModal } from './components/AddRecipeModal';
+import { CookModeModal } from './components/CookModeModal';
 import { WelcomeModal } from './components/WelcomeModal';
-import { Plus, UtensilsCrossed } from 'lucide-react';
+import { ChefHat, Plus, Sparkles, BookOpen, Heart, RefreshCw } from 'lucide-react';
 
 export function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('All');
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Modals
-  const [activeRecipe, setActiveRecipe] = useState<Recipe | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
+  const [cookingRecipe, setCookingRecipe] = useState<{ recipe: Recipe; servings: number } | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Check first visit for welcome screen
-  useEffect(() => {
-    const hasSeenWelcome = localStorage.getItem('jasmines_recipes_welcome_seen');
-    if (!hasSeenWelcome) {
-      setIsWelcomeOpen(true);
-    }
-  }, []);
-  const [cookModeState, setCookModeState] = useState<{ recipe: Recipe; servings: number } | null>(null);
-
-  // Initial load & share link sync
+  // Initial Load from Dexie & LocalStorage
   useEffect(() => {
     async function loadData() {
       try {
-        await RecipeService.init();
-        const loaded = await RecipeService.getAllRecipes();
+        const loaded = await RecipeService.getRecipes();
         setRecipes(loaded);
 
-        // Check if user opened a cross-device ?share= sync link
-        if (typeof window !== 'undefined') {
-          const params = new URLSearchParams(window.location.search);
-          const shareData = params.get('share');
-          if (shareData) {
+        // Check if welcome modal was dismissed previously
+        const seenWelcome = localStorage.getItem('jasmines_recipes_welcome_seen');
+        if (!seenWelcome) {
+          setShowWelcome(true);
+        }
+
+        // Check for shared recipe in URL hash
+        if (window.location.hash.startsWith('#recipe=')) {
+          const raw = window.location.hash.replace('#recipe=', '');
+          if (raw) {
             try {
-              const decoded = decodeURIComponent(atob(shareData));
-              const sharedRecipes = JSON.parse(decoded);
-              if (Array.isArray(sharedRecipes) && sharedRecipes.length > 0) {
-                if (confirm(`Sync ${sharedRecipes.length} recipes from shared link into your kitchen recipe box?`)) {
-                  await RecipeService.importFromJson(decoded);
-                  const merged = await RecipeService.getAllRecipes();
-                  setRecipes(merged);
-                  window.history.replaceState({}, '', window.location.pathname);
+              const shared = JSON.parse(decodeURIComponent(escape(atob(raw))));
+              if (shared && shared.title) {
+                // Add to local state if not exists
+                const exists = loaded.find(r => r.title === shared.title);
+                if (!exists) {
+                  const imported: Recipe = {
+                    ...shared,
+                    id: `shared-${Date.now()}`,
+                    createdAt: new Date().toISOString()
+                  };
+                  await RecipeService.saveRecipe(imported);
+                  setRecipes(prev => [imported, ...prev]);
+                  setSelectedRecipe(imported);
+                } else {
+                  setSelectedRecipe(exists);
                 }
+                // Clear hash
+                window.history.replaceState(null, '', window.location.pathname);
               }
             } catch (e) {
               console.warn('Could not decode share link', e);
@@ -68,6 +72,23 @@ export function App() {
     }
     loadData();
   }, []);
+
+  // Backfill: Instagram recipes whose cover is missing/expired get the post's cover saved permanently
+  const coverBackfillTried = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    recipes.forEach((r) => {
+      if (r.sourceType !== 'instagram' || !r.sourceUrl) return;
+      if (r.coverImage && r.coverImage.startsWith('data:image')) return;
+      if (coverBackfillTried.current.has(r.id)) return;
+      coverBackfillTried.current.add(r.id);
+      fetchInstagramCover(r.sourceUrl).then(async (cover) => {
+        if (!cover) return;
+        const updated = { ...r, coverImage: cover };
+        await RecipeService.saveRecipe(updated);
+        setRecipes(prev => prev.map(x => (x.id === r.id ? { ...x, coverImage: cover } : x)));
+      });
+    });
+  }, [recipes]);
 
   // Real-time autosave to localStorage whenever recipes change
   useEffect(() => {
@@ -127,95 +148,36 @@ export function App() {
     return recipes.filter(r => r.wantToTry).length;
   }, [recipes]);
 
-  // Handlers
+  // Actions
   const handleToggleFavorite = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    const newFav = await RecipeService.toggleFavorite(id);
-    setRecipes(prev => prev.map(r => r.id === id ? { ...r, favorite: newFav } : r));
-    if (activeRecipe && activeRecipe.id === id) {
-      setActiveRecipe(prev => prev ? { ...prev, favorite: newFav } : null);
+    const updated = recipes.map(r => r.id === id ? { ...r, favorite: !r.favorite } : r);
+    setRecipes(updated);
+    const target = updated.find(r => r.id === id);
+    if (target) await RecipeService.saveRecipe(target);
+    if (selectedRecipe && selectedRecipe.id === id) {
+      setSelectedRecipe(target || null);
     }
   };
 
   const handleToggleWantToTry = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    const newWant = await RecipeService.toggleWantToTry(id);
-    setRecipes(prev => prev.map(r => r.id === id ? { ...r, wantToTry: newWant } : r));
-    if (activeRecipe && activeRecipe.id === id) {
-      setActiveRecipe(prev => prev ? { ...prev, wantToTry: newWant } : null);
+    const updated = recipes.map(r => r.id === id ? { ...r, wantToTry: !r.wantToTry } : r);
+    setRecipes(updated);
+    const target = updated.find(r => r.id === id);
+    if (target) await RecipeService.saveRecipe(target);
+    if (selectedRecipe && selectedRecipe.id === id) {
+      setSelectedRecipe(target || null);
     }
   };
 
   const handleUpdateRating = async (id: string, rating: number) => {
-    await RecipeService.updateRating(id, rating);
-    setRecipes(prev => prev.map(r => r.id === id ? { ...r, rating } : r));
-    if (activeRecipe && activeRecipe.id === id) {
-      setActiveRecipe(prev => prev ? { ...prev, rating } : null);
-    }
-  };
-
-  const handleAddNote = async (recipeId: string, text: string): Promise<JasmineNote> => {
-    const newNote = await RecipeService.addJasmineNote(recipeId, text);
-    setRecipes(prev => prev.map(r => {
-      if (r.id === recipeId) {
-        return { ...r, jasmineNotes: [newNote, ...(r.jasmineNotes || [])] };
-      }
-      return r;
-    }));
-    if (activeRecipe && activeRecipe.id === recipeId) {
-      setActiveRecipe(prev => prev ? {
-        ...prev,
-        jasmineNotes: [newNote, ...(prev.jasmineNotes || [])]
-      } : null);
-    }
-    return newNote;
-  };
-
-  const handleDeleteNote = async (recipeId: string, noteId: string) => {
-    await RecipeService.deleteJasmineNote(recipeId, noteId);
-    setRecipes(prev => prev.map(r => {
-      if (r.id === recipeId) {
-        return { ...r, jasmineNotes: (r.jasmineNotes || []).filter(n => n.id !== noteId) };
-      }
-      return r;
-    }));
-    if (activeRecipe && activeRecipe.id === recipeId) {
-      setActiveRecipe(prev => prev ? {
-        ...prev,
-        jasmineNotes: (prev.jasmineNotes || []).filter(n => n.id !== noteId)
-      } : null);
-    }
-  };
-
-  const handleAddPhoto = async (recipeId: string, dataUrl: string) => {
-    await RecipeService.addUserPhoto(recipeId, dataUrl);
-    setRecipes(prev => prev.map(r => {
-      if (r.id === recipeId) {
-        return { ...r, userPhotos: [...(r.userPhotos || []), dataUrl] };
-      }
-      return r;
-    }));
-    if (activeRecipe && activeRecipe.id === recipeId) {
-      setActiveRecipe(prev => prev ? {
-        ...prev,
-        userPhotos: [...(prev.userPhotos || []), dataUrl]
-      } : null);
-    }
-  };
-
-  const handleRemovePhoto = async (recipeId: string, index: number) => {
-    await RecipeService.removeUserPhoto(recipeId, index);
-    setRecipes(prev => prev.map(r => {
-      if (r.id === recipeId) {
-        return { ...r, userPhotos: (r.userPhotos || []).filter((_, i) => i !== index) };
-      }
-      return r;
-    }));
-    if (activeRecipe && activeRecipe.id === recipeId) {
-      setActiveRecipe(prev => prev ? {
-        ...prev,
-        userPhotos: (prev.userPhotos || []).filter((_, i) => i !== index)
-      } : null);
+    const updated = recipes.map(r => r.id === id ? { ...r, rating } : r);
+    setRecipes(updated);
+    const target = updated.find(r => r.id === id);
+    if (target) await RecipeService.saveRecipe(target);
+    if (selectedRecipe && selectedRecipe.id === id) {
+      setSelectedRecipe(target || null);
     }
   };
 
@@ -224,27 +186,95 @@ export function App() {
     setRecipes(prev => {
       const idx = prev.findIndex(r => r.id === recipe.id);
       if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = recipe;
-        return copy;
+        const next = [...prev];
+        next[idx] = recipe;
+        return next;
       }
       return [recipe, ...prev];
     });
-    if (activeRecipe && activeRecipe.id === recipe.id) {
-      setActiveRecipe(recipe);
-    }
+    setEditingRecipe(null);
+    setIsAddModalOpen(false);
+    setSelectedRecipe(recipe);
   };
 
   const handleDeleteRecipe = async (id: string) => {
     await RecipeService.deleteRecipe(id);
     setRecipes(prev => prev.filter(r => r.id !== id));
-    if (activeRecipe && activeRecipe.id === id) {
-      setActiveRecipe(null);
+    if (selectedRecipe?.id === id) {
+      setSelectedRecipe(null);
     }
   };
 
-  const handleExportBackup = async () => {
-    const jsonStr = await RecipeService.exportAllAsJson();
+  const handleAddNote = async (recipeId: string, text: string): Promise<JasmineNote> => {
+    const note: JasmineNote = {
+      id: `note-${Date.now()}`,
+      text,
+      date: new Date().toISOString().split('T')[0]
+    };
+    const target = recipes.find(r => r.id === recipeId);
+    if (target) {
+      const updatedRecipe: Recipe = {
+        ...target,
+        jasmineNotes: [note, ...(target.jasmineNotes || [])]
+      };
+      await RecipeService.saveRecipe(updatedRecipe);
+      setRecipes(prev => prev.map(r => r.id === recipeId ? updatedRecipe : r));
+      if (selectedRecipe?.id === recipeId) {
+        setSelectedRecipe(updatedRecipe);
+      }
+    }
+    return note;
+  };
+
+  const handleDeleteNote = async (recipeId: string, noteId: string) => {
+    const target = recipes.find(r => r.id === recipeId);
+    if (target) {
+      const updatedRecipe: Recipe = {
+        ...target,
+        jasmineNotes: (target.jasmineNotes || []).filter(n => n.id !== noteId)
+      };
+      await RecipeService.saveRecipe(updatedRecipe);
+      setRecipes(prev => prev.map(r => r.id === recipeId ? updatedRecipe : r));
+      if (selectedRecipe?.id === recipeId) {
+        setSelectedRecipe(updatedRecipe);
+      }
+    }
+  };
+
+  const handleAddPhoto = async (recipeId: string, dataUrl: string) => {
+    const target = recipes.find(r => r.id === recipeId);
+    if (target) {
+      const updatedRecipe: Recipe = {
+        ...target,
+        userPhotos: [...(target.userPhotos || []), dataUrl]
+      };
+      await RecipeService.saveRecipe(updatedRecipe);
+      setRecipes(prev => prev.map(r => r.id === recipeId ? updatedRecipe : r));
+      if (selectedRecipe?.id === recipeId) {
+        setSelectedRecipe(updatedRecipe);
+      }
+    }
+  };
+
+  const handleRemovePhoto = async (recipeId: string, index: number) => {
+    const target = recipes.find(r => r.id === recipeId);
+    if (target) {
+      const nextPhotos = [...(target.userPhotos || [])];
+      nextPhotos.splice(index, 1);
+      const updatedRecipe: Recipe = {
+        ...target,
+        userPhotos: nextPhotos
+      };
+      await RecipeService.saveRecipe(updatedRecipe);
+      setRecipes(prev => prev.map(r => r.id === recipeId ? updatedRecipe : r));
+      if (selectedRecipe?.id === recipeId) {
+        setSelectedRecipe(updatedRecipe);
+      }
+    }
+  };
+
+  const handleExportData = () => {
+    const jsonStr = RecipeService.exportToJson(recipes);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -254,78 +284,58 @@ export function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportBackup = () => {
+  const handleImportData = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,application/json';
+    input.accept = '.json';
     input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        try {
-          const content = ev.target?.result as string;
-          const count = await RecipeService.importFromJson(content);
-          const reloaded = await RecipeService.getAllRecipes();
-          setRecipes(reloaded);
-          alert(`Successfully imported ${count} recipes!`);
-        } catch {
-          alert('Failed to import backup file. Check file format.');
-        }
-      };
-      reader.readAsText(file);
+      const text = await file.text();
+      const imported = await RecipeService.importFromJson(text);
+      setRecipes(imported);
+      alert(`🎉 Successfully restored ${imported.length} recipes into Jasmine's Box!`);
     };
     input.click();
   };
 
-  const handleShareBox = () => {
-    try {
-      const exportable = recipes.map(r => ({
-        ...r,
-        userPhotos: [] // Keep share URLs compact without huge photo bytes
-      }));
-      const encoded = btoa(encodeURIComponent(JSON.stringify(exportable)));
-      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${encoded}`;
-      
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(shareUrl);
-        alert('Recipe Box Sync Link copied to clipboard!\n\nOpen this link on Jasmine\'s phone or any other device to sync all recipes.');
-      } else {
-        prompt('Copy this sync link to transfer recipes across devices:', shareUrl);
-      }
-    } catch {
-      handleExportBackup();
+  const handleShareApp = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: "Jasmine's Recipes",
+        text: 'All your favorite recipes from websites, Instagram, and cookbooks in one cozy kitchen box!',
+        url: window.location.origin
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(window.location.origin);
+      alert('📋 Link copied to clipboard! Share it with Jasmine or friends.');
     }
   };
 
-  const handleResetDefaults = async () => {
-    if (confirm('Reset your recipe box to the original sample recipes? This will overwrite your changes.')) {
-      await RecipeService.resetToDefaults();
-      const reloaded = await RecipeService.getAllRecipes();
-      setRecipes(reloaded);
+  const handleResetToSeeds = async () => {
+    if (confirm('Restore all default starter recipes? Your custom additions will be kept.')) {
+      const restored = await RecipeService.restoreDefaults();
+      setRecipes(restored);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#221E1B]">
+    <div className="min-h-screen bg-[#FDFBF7] text-[#221E1B] flex flex-col font-sans selection:bg-[#FFEFEA] selection:text-[#FF5B26]">
       
-      {/* ReciMe Styled Top Navigation */}
+      {/* ReciMe Styled Top Navbar */}
       <Navbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onAddClick={() => {
-          setEditingRecipe(null);
-          setIsAddModalOpen(true);
-        }}
-        onExport={handleExportBackup}
-        onImport={handleImportBackup}
-        onShare={handleShareBox}
-        onReset={handleResetDefaults}
-        onShowWelcome={() => setIsWelcomeOpen(true)}
+        onAddClick={() => { setEditingRecipe(null); setIsAddModalOpen(true); }}
+        onExport={handleExportData}
+        onImport={handleImportData}
+        onShare={handleShareApp}
+        onReset={handleResetToSeeds}
+        onShowWelcome={() => setShowWelcome(true)}
         totalCount={recipes.length}
       />
 
-      {/* ReciMe Pill Categories */}
+      {/* ReciMe Category Filters */}
       <CategoryFilterBar
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
@@ -336,57 +346,66 @@ export function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6">
         
+        {/* Subheader / Active Filter View */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#221E1B]">
+              {selectedCategory === 'All' ? 'All Recipes' : selectedCategory}
+            </h2>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#F5EFE7] text-[#6E6457]">
+              {filteredRecipes.length}
+            </span>
+          </div>
+
+          {/* Quick Add CTA Button for Desktop */}
+          <button
+            onClick={() => { setEditingRecipe(null); setIsAddModalOpen(true); }}
+            className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#FF5B26] hover:bg-[#E84D1B] text-white text-xs font-bold shadow-md shadow-[#FF5B26]/20 active:scale-95 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Import Recipe</span>
+          </button>
+        </div>
+
+        {/* Recipes Grid */}
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-[#8C8274] gap-3">
-            <div className="w-8 h-8 border-3 border-[#FF5B26] border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm font-semibold">Opening Jasmine's Recipe Box...</p>
+          <div className="flex flex-col items-center justify-center py-20 text-[#8F8477] space-y-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-[#FF5B26]" />
+            <p className="text-sm font-semibold">Opening Jasmine's Kitchen Box...</p>
           </div>
         ) : filteredRecipes.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 landscape:grid-cols-2 landscape:md:grid-cols-3 gap-5 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
             {filteredRecipes.map((recipe) => (
               <RecipeCard
                 key={recipe.id}
                 recipe={recipe}
-                onSelect={(r) => setActiveRecipe(r)}
+                onSelect={setSelectedRecipe}
                 onToggleFavorite={handleToggleFavorite}
                 onToggleWantToTry={handleToggleWantToTry}
               />
             ))}
           </div>
         ) : (
-          /* Empty Search / Category state */
-          <div className="max-w-md mx-auto py-12 sm:py-16 text-center space-y-4">
-            <div className="w-16 h-16 rounded-3xl bg-[#F6EFE6] text-[#FF5B26] flex items-center justify-center mx-auto shadow-xs">
-              <UtensilsCrossed className="w-8 h-8 stroke-[1.8]" />
+          /* Empty State */
+          <div className="text-center py-16 sm:py-24 px-4 bg-white/70 rounded-[32px] border border-dashed border-[#E5DACD] max-w-lg mx-auto space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-[#FFEFEA] text-[#FF5B26] flex items-center justify-center mx-auto shadow-inner">
+              <ChefHat className="w-8 h-8 stroke-[2]" />
             </div>
-            <div>
-              <h3 className="font-serif text-lg sm:text-xl font-bold text-[#221E1B]">
-                No recipes found
-              </h3>
-              <p className="text-xs sm:text-sm text-[#7D7366] mt-1">
+            <div className="space-y-1">
+              <h3 className="font-serif text-xl font-bold text-[#221E1B]">No recipes found</h3>
+              <p className="text-xs sm:text-sm text-[#7D7264] max-w-sm mx-auto">
                 {searchQuery
-                  ? `We couldn't find anything matching "${searchQuery}". Try searching for an ingredient or clearing your search.`
-                  : `There are no recipes in the "${selectedCategory}" category yet.`}
+                  ? `No matches for "${searchQuery}". Try searching for another ingredient or clear the filter.`
+                  : `You don't have any recipes in "${selectedCategory}" yet.`}
               </p>
             </div>
-            <div className="pt-2 flex justify-center gap-3">
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="px-4 py-2.5 rounded-2xl border border-[#DFD5C7] bg-white text-xs font-bold text-[#544C42] hover:bg-[#FDFBF7] transition-all cursor-pointer"
-                >
-                  Clear Search
-                </button>
-              )}
+            <div className="pt-2">
               <button
-                onClick={() => {
-                  setEditingRecipe(null);
-                  setIsAddModalOpen(true);
-                }}
-                className="px-5 py-2.5 rounded-2xl bg-[#FF5B26] text-white text-xs font-bold shadow-md shadow-[#FF5B26]/25 hover:bg-[#E84D1B] transition-all flex items-center gap-1.5 cursor-pointer"
+                onClick={() => { setEditingRecipe(null); setIsAddModalOpen(true); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#FF5B26] hover:bg-[#E84D1B] text-white text-xs font-bold shadow-md shadow-[#FF5B26]/20 active:scale-95 transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>Import a Recipe</span>
+                <span>Import a Recipe Now</span>
               </button>
             </div>
           </div>
@@ -395,28 +414,29 @@ export function App() {
       </main>
 
       {/* ReciMe Footer */}
-      <footer className="border-t border-[#F2ECE3] py-6 text-center text-xs text-[#857B6E]">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>
-            Crafted for <strong className="font-serif font-bold text-[#221E1B]">Jasmine</strong> • 100% Free Kitchen Box
-          </p>
-          <div className="flex items-center gap-3 text-[11px] font-semibold text-[#A09587]">
-            <span>📱 Add to Home Screen</span>
-            <span>•</span>
-            <span>Landscape & Portrait Ready</span>
-          </div>
-        </div>
+      <footer className="mt-auto border-t border-[#F0E8DC] py-6 px-4 text-center text-xs text-[#8A8072] space-y-1">
+        <p className="font-semibold text-[#5A5246]">
+          Crafted with ❤️ for Jasmine · Warm Vanilla & Tangerine Kitchen Box
+        </p>
+        <p className="text-[11px] text-[#A69C8E]">
+          Works offline & saves automatically to your device · ReciMe inspired
+        </p>
       </footer>
 
-      {/* Detail View Modal */}
-      {activeRecipe && (
+      {/* MODALS */}
+
+      {/* 1. Welcome Modal */}
+      <WelcomeModal
+        isOpen={showWelcome}
+        onClose={() => setShowWelcome(false)}
+      />
+
+      {/* 2. Recipe Detail Modal */}
+      {selectedRecipe && (
         <RecipeDetailModal
-          recipe={activeRecipe}
-          onClose={() => setActiveRecipe(null)}
-          onEdit={(r) => {
-            setEditingRecipe(r);
-            setIsAddModalOpen(true);
-          }}
+          recipe={selectedRecipe}
+          onClose={() => setSelectedRecipe(null)}
+          onEdit={(r) => { setSelectedRecipe(null); setEditingRecipe(r); setIsAddModalOpen(true); }}
           onDelete={handleDeleteRecipe}
           onToggleFavorite={handleToggleFavorite}
           onToggleWantToTry={handleToggleWantToTry}
@@ -425,41 +445,28 @@ export function App() {
           onDeleteNote={handleDeleteNote}
           onAddPhoto={handleAddPhoto}
           onRemovePhoto={handleRemovePhoto}
-          onStartCooking={(r, s) => {
-            setCookModeState({ recipe: r, servings: s });
-          }}
+          onStartCooking={(r, s) => setCookingRecipe({ recipe: r, servings: s })}
         />
       )}
 
-      {/* Cook Mode Modal */}
-      {cookModeState && (
-        <CookModeModal
-          recipe={cookModeState.recipe}
-          initialServings={cookModeState.servings}
-          onClose={() => setCookModeState(null)}
-        />
-      )}
-
-      {/* Import / Edit Recipe Modal */}
+      {/* 3. Add / Edit Recipe Modal */}
       {isAddModalOpen && (
         <AddRecipeModal
           initialRecipe={editingRecipe || undefined}
           onSave={handleSaveRecipe}
-          onClose={() => {
-            setIsAddModalOpen(false);
-            setEditingRecipe(null);
-          }}
+          onClose={() => { setIsAddModalOpen(false); setEditingRecipe(null); }}
         />
       )}
 
-      {/* Welcome Tour / Guide Modal */}
-      <WelcomeModal
-        isOpen={isWelcomeOpen}
-        onClose={() => setIsWelcomeOpen(false)}
-      />
+      {/* 4. Cook Mode Modal */}
+      {cookingRecipe && (
+        <CookModeModal
+          recipe={cookingRecipe.recipe}
+          initialServings={cookingRecipe.servings}
+          onClose={() => setCookingRecipe(null)}
+        />
+      )}
 
     </div>
   );
 }
-
-export default App;
