@@ -1,4 +1,66 @@
+/**
+ * Converts Instagram embed HTML or rich text into clean plain text with preserved line breaks.
+ */
+export function cleanHtmlCaption(rawHtml: string): string {
+  return rawHtml
+    .replace(/<br\s*[\/]?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .trim();
+}
+
+/**
+ * Splits raw instruction prose or multi-sentence directions into clean line-break separated steps,
+ * preserving culinary abbreviations (tbsp., tsp., min., oz., lb., approx., etc.).
+ */
+export function splitInstructionIntoSteps(text: string): string[] {
+  const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  const result: string[] = [];
+
+  for (const rawLine of rawLines) {
+    const clean = rawLine
+      .replace(/^(?:step\s*\d+[:.)\-]?|\d+[.)]|[1-9]️⃣|🔟)\s*/i, '')
+      .replace(/(\s*#[A-Za-z0-9_]+)+\s*$/, '')
+      .trim();
+    if (!clean) continue;
+
+    // Short instruction or single sentence: keep intact
+    if (clean.length < 80) {
+      result.push(clean);
+      continue;
+    }
+
+    // Protect common abbreviations from splitting
+    const safeText = clean
+      .replace(/\b(tbsp|tsp|min|mins|sec|secs|hr|hrs|oz|lb|lbs|approx|deg|temp|vs|e\.g|i\.e)\./gi, '$1__DOT__');
+
+    // Split on period or exclamation mark followed by whitespace and capital letter or number
+    const parts = safeText.split(/(?<=[.!?])\s+(?=[A-Z0-9])/);
+    if (parts.length > 1) {
+      for (const part of parts) {
+        const restored = part.replace(/__DOT__/g, '.').trim();
+        if (restored) result.push(restored);
+      }
+    } else {
+      result.push(clean);
+    }
+  }
+
+  return result;
+}
+
 import type { Recipe, Ingredient, InstructionStep } from '../types/recipe';
+import { inferIngredientsFromSteps } from './ingredientInference';
+import { fetchInstagramCover } from './imageService';
 
 /**
  * Converts ISO 8601 duration like "PT25M" or "PT1H15M" into minutes
@@ -169,11 +231,13 @@ export function parseRecipeFromHtml(html: string, sourceUrl: string): Partial<Re
  */
 export function parseRawRecipeText(text: string, titleHint?: string): Partial<Recipe> {
   // Pre-normalize text to handle inline section keywords or collapsed line breaks
-  const preprocessed = text
+  const preprocessed = cleanHtmlCaption(text)
     .replace(/\r\n/g, '\n')
     .replace(/\s*\b(ingredients|what you need|shopping list|grocery list|you'll need|for the sauce|for the marinade)[\s:]+/gi, '\nIngredients:\n')
-    .replace(/\s*\b(instructions|directions|method|how to make|steps|preparation)[\s:]+/gi, '\nInstructions:\n')
-    .replace(/(\b\d+[\.\)])\s+/g, '\n$1 ');
+    .replace(/\s*\b(instructions|directions|method|how to make|steps|preparation|how to|process)[\s:]+/gi, '\nInstructions:\n')
+    .replace(/\s*\b(step\s*\d+[:.)\-]?)\s+/gi, '\n$1 ')
+    .replace(/\s*([1-9]️⃣|🔟)\s*/g, '\n$1 ')
+    .replace(/(?:^|\s+)(\d+[\.\)])\s+/g, '\n$1 ');
 
   const lines = preprocessed.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
   
@@ -238,6 +302,19 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
     }
 
     if (currentSection === 'header') {
+      // A numbered line like "1. Melt the butter" is a direction, not an ingredient
+      if (/^(?:step\s*\d+[:.)\-]?|\d+[.)]|[1-9]️⃣|🔟)\s+[A-Za-z]/i.test(line)) {
+        currentSection = 'instructions';
+        const stepTexts = splitInstructionIntoSteps(line);
+        for (const st of stepTexts) {
+          instructions.push({
+            id: `step-${Date.now()}-${instructions.length}`,
+            stepNumber: instructions.length + 1,
+            text: st
+          });
+        }
+        continue;
+      }
       // Check if line looks like an ingredient (starts with amount/bullet)
       if (/^(\d|½|¼|¾|⅓|⅔|\-|\*|•)/.test(line) && line.length < 100) {
         currentSection = 'ingredients';
@@ -255,17 +332,14 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
       }
     } else if (currentSection === 'ingredients') {
       // Check if line suddenly looks like an instruction
-      if (/^(step\s*\d+|\d+\.)\s+/i.test(line)) {
+      if (/^(?:step\s*\d+[:.)\-]?|\d+[.)]|[1-9]️⃣|🔟)\s+/i.test(line)) {
         currentSection = 'instructions';
-        const cleanText = line
-          .replace(/^(step\s*\d+|\d+\.)\s+/i, '')
-          .replace(/(\s*#[A-Za-z0-9_]+)+\s*$/, '')
-          .trim();
-        if (cleanText) {
+        const stepTexts = splitInstructionIntoSteps(line);
+        for (const st of stepTexts) {
           instructions.push({
             id: `step-${Date.now()}-${instructions.length}`,
             stepNumber: instructions.length + 1,
-            text: cleanText
+            text: st
           });
         }
       } else {
@@ -280,15 +354,12 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
         });
       }
     } else if (currentSection === 'instructions') {
-      const cleanText = line
-        .replace(/^(step\s*\d+|\d+[\.\)])\s+/i, '')
-        .replace(/(\s*#[A-Za-z0-9_]+)+\s*$/, '')
-        .trim();
-      if (cleanText) {
+      const stepTexts = splitInstructionIntoSteps(line);
+      for (const st of stepTexts) {
         instructions.push({
           id: `step-${Date.now()}-${instructions.length}`,
           stepNumber: instructions.length + 1,
-          text: cleanText
+          text: st
         });
       }
     }
@@ -298,16 +369,34 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
   if (ingredients.length === 0 && instructions.length === 0 && lines.length > 0) {
     lines.forEach((l) => {
       if (isHashtagLine(l) || isSocialPromoLine(l)) return;
-      if (/^(\d|½|¼|¾|⅓|⅔|\-|\*|•)/.test(l)) {
+      if (/^(\d|½|¼|¾|⅓|⅔|\-|\*|•)/.test(l) && l.length < 100) {
         ingredients.push({
           id: `ing-${Date.now()}-${ingredients.length}`,
           raw: l.replace(/^[\-\*•]\s*/, '')
         });
       } else {
-        instructions.push({
-          id: `step-${Date.now()}-${instructions.length}`,
-          stepNumber: instructions.length + 1,
-          text: l.replace(/^(step\s*\d+|\d+[\.\)])\s+/i, '')
+        const stepTexts = splitInstructionIntoSteps(l);
+        for (const st of stepTexts) {
+          instructions.push({
+            id: `step-${Date.now()}-${instructions.length}`,
+            stepNumber: instructions.length + 1,
+            text: st
+          });
+        }
+      }
+    });
+  }
+
+  // Captions often omit an ingredient list: infer one from the directions
+  if (ingredients.length < 2) {
+    const sourceSteps = instructions.length > 0 ? instructions.map(s => s.text) : [description];
+    const inferred = inferIngredientsFromSteps(sourceSteps);
+    const existing = new Set(ingredients.map(i => i.raw.toLowerCase()));
+    inferred.forEach((raw) => {
+      if (!existing.has(raw.toLowerCase())) {
+        ingredients.push({
+          id: `ing-${Date.now()}-${ingredients.length}`,
+          raw
         });
       }
     });
@@ -362,10 +451,12 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
   // If caption was already pasted along with the URL in the text
   if (remainingText.length > 25) {
     const parsed = parseRawRecipeText(remainingText);
+    const pastedCover = targetUrl ? await fetchInstagramCover(targetUrl) : undefined;
     return {
       success: true,
       recipe: {
         ...parsed,
+        coverImage: pastedCover,
         sourceType: 'instagram',
         sourceUrl: targetUrl || inputUrlOrText,
         sourceName: authorName,
@@ -388,10 +479,12 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
       const data = await apiRes.json();
       if (data.caption && data.caption.length > 10) {
         const parsed = parseRawRecipeText(data.caption);
+        const apiCover = await fetchInstagramCover(targetUrl, data.image);
         return {
           success: true,
           recipe: {
             ...parsed,
+            coverImage: apiCover,
             sourceType: 'instagram',
             sourceUrl: targetUrl,
             sourceName: data.authorName || authorName,
@@ -420,13 +513,15 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
         const html = json.contents || '';
         const captionMatch = html.match(/class="Caption"[^>]*>([\s\S]*?)<\/div>/i);
         if (captionMatch) {
-          const caption = captionMatch[1].replace(/<[^>]+>/g, '').trim();
+          const caption = cleanHtmlCaption(captionMatch[1]);
           if (caption.length > 10) {
             const parsed = parseRawRecipeText(caption);
+            const proxyCover = await fetchInstagramCover(targetUrl);
             return {
               success: true,
               recipe: {
                 ...parsed,
+                coverImage: proxyCover,
                 sourceType: 'instagram',
                 sourceUrl: targetUrl,
                 sourceName: authorName,
