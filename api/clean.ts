@@ -28,13 +28,14 @@ async function pickModel(key: string): Promise<string> {
 }
 const INSTRUCTIONS = `You turn messy recipe text (social media captions, pasted notes, text read from a cookbook photo) into a clean recipe.
 Rules:
-- Use ONLY what the text says. Never invent ingredients, amounts, steps or times. If something is missing, leave it empty or 0.
+- Use ONLY what the text says. Never invent ingredients, amounts or steps. If one of those is missing, leave it empty. The one exception is prep and cook time, below.
 - title: the dish name only, in normal capitalisation. No emojis, no "Recipe", no hype words.
 - description: one or two plain sentences (the hook, a tip, or a nutrition line if given). Empty if there is nothing useful.
 - ingredients: one string per ingredient, amount first, like "1 1/2 cups all-purpose flour". Split lines that hold several ingredients. Keep prep notes like ", diced".
 - steps: one string per cooking step, in order, in plain sentences, without "Step 1" numbering. Split long run-on paragraphs into sensible steps. Keep tips that belong to a step inside that step.
 - Ignore calls to action ("comment RECIPE", "follow me", "link in bio"), credits, hashtags and emoji decoration.
-- servings: a whole number, 0 if unknown. prepMinutes and cookMinutes: whole minutes, 0 if unknown.
+- servings: a whole number, 0 if unknown.
+- prepMinutes and cookMinutes: whole minutes. Use the times the text states. If the text gives none, estimate them realistically from the ingredients and steps: prepMinutes is hands-on chopping, mixing and assembling; cookMinutes is time on the heat, in the oven, or chilling and setting. Use 0 only for a part that truly takes no time (for example a no-cook salad has cookMinutes 0).
 - categories: any of "Dinners", "Baking", "Salads & Sides". Pick what fits, or none.
 - tags: up to 6 short lowercase words about the dish (cuisine, main ingredient, diet). No hashtags.
 - creator: the Instagram/creator handle credited as the recipe's original author, without "@", or empty.`;
@@ -120,4 +121,5 @@ export default async function handler(req: any, res: any) {
     return res.status(502).json({ error: err?.message || 'AI clean-up failed' });
   }
 }
+
 
