@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { fetchInstagramCover } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { Navbar } from './components/Navbar';
@@ -68,6 +69,23 @@ export function App() {
     }
     loadData();
   }, []);
+
+  // Backfill: Instagram recipes whose cover is missing/expired get the post's cover saved permanently
+  const coverBackfillTried = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    recipes.forEach((r) => {
+      if (r.sourceType !== 'instagram' || !r.sourceUrl) return;
+      if (r.coverImage && r.coverImage.startsWith('data:image')) return;
+      if (coverBackfillTried.current.has(r.id)) return;
+      coverBackfillTried.current.add(r.id);
+      fetchInstagramCover(r.sourceUrl).then(async (cover) => {
+        if (!cover) return;
+        const updated = { ...r, coverImage: cover };
+        await RecipeService.saveRecipe(updated);
+        setRecipes(prev => prev.map(x => (x.id === r.id ? { ...x, coverImage: cover } : x)));
+      });
+    });
+  }, [recipes]);
 
   // Real-time autosave to localStorage whenever recipes change
   useEffect(() => {

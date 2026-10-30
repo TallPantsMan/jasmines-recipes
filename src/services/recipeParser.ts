@@ -1,5 +1,6 @@
 import type { Recipe, Ingredient, InstructionStep } from '../types/recipe';
 import { inferIngredientsFromSteps } from './ingredientInference';
+import { fetchInstagramCover } from './imageService';
 
 /**
  * Converts ISO 8601 duration like "PT25M" or "PT1H15M" into minutes
@@ -394,10 +395,12 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
   // If caption was already pasted along with the URL in the text
   if (remainingText.length > 25) {
     const parsed = parseRawRecipeText(remainingText);
+    const pastedCover = targetUrl ? await fetchInstagramCover(targetUrl) : undefined;
     return {
       success: true,
       recipe: {
         ...parsed,
+        coverImage: pastedCover,
         sourceType: 'instagram',
         sourceUrl: targetUrl || inputUrlOrText,
         sourceName: authorName,
@@ -420,10 +423,12 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
       const data = await apiRes.json();
       if (data.caption && data.caption.length > 10) {
         const parsed = parseRawRecipeText(data.caption);
+        const apiCover = await fetchInstagramCover(targetUrl, data.image);
         return {
           success: true,
           recipe: {
             ...parsed,
+            coverImage: apiCover,
             sourceType: 'instagram',
             sourceUrl: targetUrl,
             sourceName: data.authorName || authorName,
@@ -455,10 +460,12 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
           const caption = captionMatch[1].replace(/<[^>]+>/g, '').trim();
           if (caption.length > 10) {
             const parsed = parseRawRecipeText(caption);
+            const proxyCover = await fetchInstagramCover(targetUrl);
             return {
               success: true,
               recipe: {
                 ...parsed,
+                coverImage: proxyCover,
                 sourceType: 'instagram',
                 sourceUrl: targetUrl,
                 sourceName: authorName,

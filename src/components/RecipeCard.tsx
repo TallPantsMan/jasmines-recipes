@@ -1,4 +1,5 @@
 import React from 'react';
+import { recipeImageSrc, generatedCover } from '../services/imageService';
 import type { Recipe } from '../types/recipe';
 import { Heart, Clock, BookOpen, Globe, MessageSquare, Star, Utensils, Bookmark } from 'lucide-react';
 import { InstagramIcon } from './Icons';
@@ -58,19 +59,13 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
     >
       {/* Cover Image & ReciMe Floating Badges */}
       <div className="relative aspect-[16/11] sm:aspect-[4/3] w-full overflow-hidden bg-[#F5EFE7]">
-        {recipe.coverImage ? (
-          <img
-            src={recipe.coverImage}
-            alt={recipe.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-[#B5ABA0] gap-2">
-            <Utensils className="w-10 h-10 stroke-[1.5]" />
-            <span className="text-xs font-semibold">No cover photo</span>
-          </div>
-        )}
+        <img
+ src={recipeImageSrc(recipe)}
+ alt={recipe.title}
+ className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+ loading="lazy"
+ onError={(e) => { const fb = generatedCover(recipe); if (e.currentTarget.src !== fb) e.currentTarget.src = fb; }}
+ />
 
         {/* Top-Left Source Pill */}
         <div className="absolute top-3 left-3 flex items-center gap-1.5">
