@@ -1,4 +1,5 @@
 import type { Recipe, Ingredient, InstructionStep } from '../types/recipe';
+import { inferIngredientsFromSteps } from './ingredientInference';
 
 /**
  * Converts ISO 8601 duration like "PT25M" or "PT1H15M" into minutes
@@ -238,6 +239,22 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
     }
 
     if (currentSection === 'header') {
+      // A numbered line like "1. Melt the butter" is a direction, not an ingredient
+      if (/^(?:step\s*\d+[:.)]?|\d+[.)])\s+[A-Za-z]/i.test(line)) {
+        currentSection = 'instructions';
+        const cleanText = line
+          .replace(/^(?:step\s*\d+[:.)]?|\d+[.)])\s+/i, '')
+          .replace(/(\s*#[A-Za-z0-9_]+)+\s*$/, '')
+          .trim();
+        if (cleanText) {
+          instructions.push({
+            id: `step-${Date.now()}-${instructions.length}`,
+            stepNumber: instructions.length + 1,
+            text: cleanText
+          });
+        }
+        continue;
+      }
       // Check if line looks like an ingredient (starts with amount/bullet)
       if (/^(\d|½|¼|¾|⅓|⅔|\-|\*|•)/.test(line) && line.length < 100) {
         currentSection = 'ingredients';
@@ -308,6 +325,21 @@ export function parseRawRecipeText(text: string, titleHint?: string): Partial<Re
           id: `step-${Date.now()}-${instructions.length}`,
           stepNumber: instructions.length + 1,
           text: l.replace(/^(step\s*\d+|\d+[\.\)])\s+/i, '')
+        });
+      }
+    });
+  }
+
+  // Captions often omit an ingredient list: infer one from the directions
+  if (ingredients.length < 2) {
+    const sourceSteps = instructions.length > 0 ? instructions.map(s => s.text) : [description];
+    const inferred = inferIngredientsFromSteps(sourceSteps);
+    const existing = new Set(ingredients.map(i => i.raw.toLowerCase()));
+    inferred.forEach((raw) => {
+      if (!existing.has(raw.toLowerCase())) {
+        ingredients.push({
+          id: `ing-${Date.now()}-${ingredients.length}`,
+          raw
         });
       }
     });
