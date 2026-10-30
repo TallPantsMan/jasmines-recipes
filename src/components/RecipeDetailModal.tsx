@@ -113,7 +113,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
       <div className="bg-[#FDFBF7] w-full max-w-5xl h-[100dvh] sm:h-auto sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col sm:max-h-[94vh] border border-[#EFE7DE]">
         
         {/* ReciMe Styled Top Bar */}
-        <div style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }} className="shrink-0 sticky top-0 z-20 bg-[#FDFBF7]/95 backdrop-blur-md px-4 sm:px-6 pb-3 border-b border-[#F0E8DC] flex items-center justify-between">
+        <div style={{ paddingTop: 'max(1.25rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }} className="shrink-0 sticky top-0 z-20 bg-[#FDFBF7]/95 backdrop-blur-md px-4 sm:px-6 pb-3 border-b border-[#F0E8DC] flex items-center justify-between">
           <div className="flex items-center gap-2">
             {/* Want to Try Bookmark Button */}
             <button
@@ -186,7 +186,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
         </div>
 
         {/* Scrollable Body: Dual columns in Landscape, stacked in Portrait */}
-        <div style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }} className="overflow-y-auto overscroll-contain flex-1 min-h-0 p-4 sm:p-6 lg:p-8 space-y-6">
+        <div style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))' }} className="overflow-y-auto overscroll-contain flex-1 min-h-0 p-4 sm:p-6 lg:p-8 space-y-6">
           
           {/* Active Kitchen Timer */}
           {activeTimerMinutes !== null && (
@@ -412,7 +412,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                           className="absolute top-1.5 right-1.5 p-1 bg-black/60 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                           title="Remove photo"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-3 3" />
                         </button>
                       </div>
                     ))}
@@ -505,7 +505,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         {step.stepNumber}
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs sm:text-sm text-[#2C2620] leading-relaxed font-medium">
+                        <p className="text-xs sm:text-sm text-[#2C2620] leading-relaxed font-medium whitespace-pre-line">
                           {step.text}
                         </p>
 
