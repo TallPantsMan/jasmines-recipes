@@ -38,18 +38,50 @@ function coreWords(raw: string): string[] {
  * Matches by name, so "sauce ingredients" or "the dry ingredients" are not expanded.
  */
 export function stepIngredients(stepText: string, ingredients: Ingredient[], factor = 1): string[] {
-  const words = new Set((stepText.toLowerCase().match(/[a-zà-ÿ]+/g) || []).map(stem));
-  const out: string[] = [];
-  for (const ing of ingredients) {
-    const core = coreWords(ing.raw);
-    if (core.length === 0) continue;
+  const lower = stepText.toLowerCase();
+  const words = new Set((lower.match(/[a-zà-ÿ]+/g) || []).map(stem));
+  const cores = ingredients.map((i) => coreWords(i.raw));
+  // How many ingredients start with each word: "beef" is only a safe nickname for "beef flank" if nothing else starts with it
+  const firstCount = new Map<string, number>();
+  for (const c of cores) if (c[0]) firstCount.set(c[0], (firstCount.get(c[0]) || 0) + 1);
+
+  // Ingredients that match, grouped by name (recipes often list the same thing twice: once for the marinade, once for the sauce)
+  const groups = new Map<string, Array<{ raw: string; score: number }>>();
+  ingredients.forEach((ing, idx) => {
+    const core = cores[idx];
+    if (core.length === 0) return;
     const all = core.every((w) => words.has(w));
     const last = core[core.length - 1];
     const lastOnly = core.length > 1 && !GENERIC.has(last) && words.has(last);
-    // "beef flank" is usually just called "the beef" in the steps
     const first = core[0];
-    const firstOnly = core.length > 1 && first.length >= 4 && !COLOR_OR_TYPE.has(first) && !GENERIC.has(first) && words.has(first);
-    if (all || lastOnly || firstOnly) out.push(scaleIngredient(ing.raw, factor));
+    const firstOnly =
+      core.length > 1 && first.length >= 4 && firstCount.get(first) === 1 &&
+      !COLOR_OR_TYPE.has(first) && !GENERIC.has(first) && words.has(first);
+    if (!(all || lastOnly || firstOnly)) return;
+
+    // Prefer the line whose amount (and whole name) the step itself mentions
+    const amount = ing.raw.toLowerCase().match(/^\s*(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[½¼¾⅓⅔⅛])\s*([a-z]+)?/);
+    const amountText = amount ? `${amount[1].trim()} ${amount[2] || ''}`.trim() : '';
+    const amountRe = amountText
+      ? new RegExp(
+          `(?<![\\d./])${amountText.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&').replace(/\s+/g, '\\s*')}\\s+(?:of\\s+)?(?:[a-zà-ÿ]+\\s+){0,2}${core[core.length - 1]}`
+        )
+      : null;
+    const rawWords = (ing.raw.toLowerCase().split(',')[0].match(/[a-zà-ÿ]{3,}/g) || []).filter((w) => !UNITS.has(w));
+    let score = 0;
+    if (amountRe && amountRe.test(lower)) score += 2;
+    if (rawWords.length > 0 && rawWords.every((w) => lower.includes(w))) score += 1;
+
+    const key = core.join(' ');
+    groups.set(key, [...(groups.get(key) || []), { raw: ing.raw, score }]);
+  });
+
+  const out: string[] = [];
+  for (const list of groups.values()) {
+    const best = Math.max(...list.map((l) => l.score));
+    // Same name listed twice and the step doesn't say which: show the first one only
+    const keep = best > 0 ? list.filter((l) => l.score === best) : list.slice(0, 1);
+    for (const k of keep) out.push(scaleIngredient(k.raw, factor));
   }
   return out;
 }
