@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { fetchInstagramCover } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { signOut } from './services/auth';
 import { backupRecipe, backupAll, flushBackupQueue } from './services/backupService';
 import {
-  sendRecipe, shareApp, readIncomingRecipe, hasIncomingLink, clearIncomingLink, type ShareOutcome
+  sendRecipe, shareApp, recipeFromCode, type ShareOutcome
 } from './services/shareService';
 import { ReceivedRecipeModal } from './components/ReceivedRecipeModal';
 import { Navbar } from './components/Navbar';
@@ -262,44 +262,30 @@ export function App() {
   };
 
   const handleSendRecipe = async (recipe: Recipe) => {
-    reportShare(await sendRecipe(recipe), 'Link copied. Paste it in a message to Jasmine.');
+    reportShare(await sendRecipe(recipe), 'Recipe code copied. Paste it in a message to Jasmine.');
   };
 
   const handleShareApp = async () => {
     reportShare(await shareApp(), 'App link copied.');
   };
 
-  // Someone opened a "send" link: offer to save that recipe
-  const openIncomingLink = async () => {
-    if (!hasIncomingLink()) return;
-    const recipe = await readIncomingRecipe();
-    if (recipe) setIncomingRecipe(recipe);
-    else {
-      clearIncomingLink();
-      showToast("That recipe link didn't work. Ask for it to be sent again.");
-    }
+  // A recipe code pasted into the Import box: show a preview and offer to save it
+  const handlePastedCode = async (text: string): Promise<boolean> => {
+    const recipe = await recipeFromCode(text);
+    if (!recipe) return false;
+    setIncomingRecipe(recipe);
+    return true;
   };
-
-  useEffect(() => {
-    void openIncomingLink();
-    window.addEventListener('hashchange', openIncomingLink);
-    return () => window.removeEventListener('hashchange', openIncomingLink);
-  }, []);
 
   const handleSaveIncoming = async () => {
     if (!incomingRecipe) return;
     const saved = incomingRecipe;
     setIncomingRecipe(null);
-    clearIncomingLink();
     await handleSaveRecipe(saved);
     showToast(`Saved "${saved.title}" to your recipes`);
   };
 
-  const dismissIncoming = () => {
-    setIncomingRecipe(null);
-    clearIncomingLink();
-  };
-
+  const dismissIncoming = () => setIncomingRecipe(null);
   const alreadyHaveIncoming =
     !!incomingRecipe &&
     recipes.some(
@@ -309,9 +295,9 @@ export function App() {
     );
 
   const handleBackupNow = async () => {
-    setBackupStatus('Backing up…');
+    setBackupStatus('Backing upâ€¦');
     const result = await backupAll(recipes);
-    setBackupStatus(result.ok ? `Backed up ${result.sent} ✓` : 'Backup failed');
+    setBackupStatus(result.ok ? `Backed up ${result.sent} âœ“` : 'Backup failed');
     if (!result.ok) alert(result.reason);
     setTimeout(() => setBackupStatus(''), 4000);
   };
@@ -500,18 +486,18 @@ export function App() {
             For Jasmine, Love Alex
           </p>
           <div className="flex items-center gap-3 text-[11px] font-semibold text-[#A09587]">
-            <span>📱 Add to Home Screen</span>
-            <span>•</span>
+            <span>ðŸ“± Add to Home Screen</span>
+            <span>â€¢</span>
             <button onClick={handleShareApp} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Share app</button>
-            <span>•</span>
+            <span>â€¢</span>
             <button
               onClick={handleBackupNow}
-              disabled={backupStatus === 'Backing up…'}
+              disabled={backupStatus === 'Backing upâ€¦'}
               className="hover:text-[#FF5B26] transition-colors cursor-pointer"
             >
               {backupStatus || 'Back up now'}
             </button>
-            <span>•</span>
+            <span>â€¢</span>
             <button onClick={signOut} className="hover:text-[#FF5B26] transition-colors cursor-pointer">Sign out</button>
           </div>
         </div>
@@ -572,6 +558,7 @@ export function App() {
         <AddRecipeModal
           initialRecipe={editingRecipe || undefined}
           onSave={handleSaveRecipe}
+          onPasteRecipeCode={handlePastedCode}
           onClose={() => {
             setIsAddModalOpen(false);
             setEditingRecipe(null);
@@ -590,3 +577,4 @@ export function App() {
 }
 
 export default App;
+

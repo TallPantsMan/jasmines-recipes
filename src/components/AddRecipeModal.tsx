@@ -5,6 +5,7 @@ import { processCookbookImages, type OcrProgress } from '../services/ocrService'
 import { fileToCompressedDataUrl } from '../services/imageService';
 import { fetchPageHtml } from '../services/pageFetcher';
 import { refineWithAi, refineParsedRecipe } from '../services/aiClean';
+import { looksLikeRecipeCode } from '../services/shareService';
 import {
   X, Globe, BookOpen, PenTool, Sparkles,
   Camera, ImagePlus, Loader2, Bookmark, ExternalLink
@@ -15,6 +16,8 @@ interface AddRecipeModalProps {
   initialRecipe?: Recipe;
   onSave: (recipe: Recipe) => void;
   onClose: () => void;
+  /** A recipe code sent from the other person's app. Returns false when the code can't be read. */
+  onPasteRecipeCode?: (text: string) => Promise<boolean>;
 }
 
 type IntakeTab = 'website' | 'instagram' | 'cookbook' | 'manual';
@@ -22,7 +25,8 @@ type IntakeTab = 'website' | 'instagram' | 'cookbook' | 'manual';
 export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   initialRecipe,
   onSave,
-  onClose
+  onClose,
+  onPasteRecipeCode
 }) => {
   const getInitialTab = (): IntakeTab => {
     if (!initialRecipe) return 'website';
@@ -114,6 +118,14 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const handleScrapeUrl = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlInput.trim()) return;
+
+    // A recipe sent from the other person's app: hand it over to be previewed and saved
+    if (looksLikeRecipeCode(urlInput)) {
+      setScrapeError('');
+      if (onPasteRecipeCode && (await onPasteRecipeCode(urlInput))) onClose();
+      else setScrapeError("That recipe code didn't work. Ask for it to be sent again, and make sure you pasted the whole message.");
+      return;
+    }
 
     let targetUrl = urlInput.trim();
     if (!targetUrl.startsWith('http')) {
@@ -435,12 +447,16 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                 </h3>
                 <p className="text-xs text-[#7A7165]">
                   Supports NYT Cooking, Half Baked Harvest, Allrecipes, Sally's Baking Addiction, and thousands more.
+                  Got a recipe sent from Alex? Paste the whole message here.
                 </p>
               </div>
 
               <form onSubmit={handleScrapeUrl} className="space-y-3">
                 <input
-                  type="url"
+                  type="text"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                   placeholder="https://www.halfbakedharvest.com/..."
@@ -973,4 +989,5 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     </div>
   );
 };
+
 

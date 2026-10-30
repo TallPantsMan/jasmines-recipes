@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import type { Recipe } from '../types/recipe';
 import { recipeImageSrc, generatedCover } from '../services/imageService';
 import { Check, Clock, X } from 'lucide-react';
@@ -10,7 +10,7 @@ interface ReceivedRecipeModalProps {
   onDismiss: () => void;
 }
 
-/** Shown when someone opens a "send" link: a preview, with one tap to keep it. */
+/** Shown when a recipe code is pasted into Import: a preview, with one tap to keep it. */
 export const ReceivedRecipeModal: React.FC<ReceivedRecipeModalProps> = ({ recipe, alreadyHave, onSave, onDismiss }) => {
   const totalTime = (recipe.prepTimeMinutes || 0) + (recipe.cookTimeMinutes || 0);
 
@@ -72,3 +72,4 @@ export const ReceivedRecipeModal: React.FC<ReceivedRecipeModalProps> = ({ recipe
     </div>
   );
 };
+

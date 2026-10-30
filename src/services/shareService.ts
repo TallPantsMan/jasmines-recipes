@@ -1,12 +1,12 @@
-import type { Recipe, RecipeSourceType } from '../types/recipe';
+﻿import type { Recipe, RecipeSourceType } from '../types/recipe';
 
 /**
- * Sending a recipe puts the whole recipe inside the link itself (squeezed small), so there is no server or account
- * in between. Whoever opens the link in the app is offered to save it. Photos are left out; a cover from an
+ * Sending a recipe turns the whole recipe into a code (squeezed small), so there is no server or account in between.
+ * It goes in a message; whoever pastes that message into the app's Import box is offered to save it. Photos are left out; a cover from an
  * Instagram post is fetched again by the receiving app from the post's address.
  */
 
-const HASH_PREFIX = '#/send/';
+const CODE_PREFIX = 'JASMINE-RECIPE-';
 const MAX_LIST = 120;
 
 interface SharedPayload {
@@ -130,34 +130,35 @@ export function payloadToRecipe(data: unknown): Recipe | null {
 
 const appAddress = () => `${window.location.origin}${window.location.pathname}`;
 
-export async function buildRecipeLink(r: Recipe): Promise<string> {
-  return `${appAddress()}${HASH_PREFIX}${await pack(recipeToPayload(r))}`;
+export async function buildRecipeCode(r: Recipe): Promise<string> {
+  return `${CODE_PREFIX}${await pack(recipeToPayload(r))}`;
 }
 
-/** The recipe in the address bar, if someone opened a "send" link. */
-export async function readIncomingRecipe(): Promise<Recipe | null> {
-  const hash = window.location.hash;
-  if (!hash.startsWith(HASH_PREFIX)) return null;
-  try {
-    return payloadToRecipe(await unpack(hash.slice(HASH_PREFIX.length)));
-  } catch {
-    return null;
+export const looksLikeRecipeCode = (text: string): boolean => text.includes(CODE_PREFIX);
+
+/**
+ * The recipe inside a pasted code. The code can be pasted on its own or inside the whole message it arrived in,
+ * and some chat apps add line breaks to long text, so a code that was split across lines is joined back up.
+ */
+export async function recipeFromCode(text: string): Promise<Recipe | null> {
+  const at = text.indexOf(CODE_PREFIX);
+  if (at < 0) return null;
+  const after = text.slice(at + CODE_PREFIX.length);
+  const attempts = [after.match(/^[A-Za-z0-9_\-\s]+/)?.[0].replace(/\s+/g, ''), after.match(/^[A-Za-z0-9_-]+/)?.[0]];
+  for (const code of attempts) {
+    if (!code) continue;
+    try {
+      const recipe = payloadToRecipe(await unpack(code));
+      if (recipe) return recipe;
+    } catch {
+      /* try the next way of reading it */
+    }
   }
+  return null;
 }
-
-export const hasIncomingLink = (): boolean => window.location.hash.startsWith(HASH_PREFIX);
-
-export function clearIncomingLink() {
-  try {
-    window.history.replaceState(null, '', appAddress());
-  } catch {
-    window.location.hash = '';
-  }
-}
-
 export type ShareOutcome = 'shared' | 'copied' | 'failed' | 'cancelled';
 
-async function shareOrCopy(data: { title: string; text: string; url: string }): Promise<ShareOutcome> {
+async function shareOrCopy(data: { title: string; text: string; url?: string }): Promise<ShareOutcome> {
   if (typeof navigator.share === 'function') {
     try {
       await navigator.share(data);
@@ -167,7 +168,7 @@ async function shareOrCopy(data: { title: string; text: string; url: string }): 
     }
   }
   try {
-    await navigator.clipboard.writeText(data.url);
+    await navigator.clipboard.writeText(data.url || data.text);
     return 'copied';
   } catch {
     return 'failed';
@@ -175,10 +176,14 @@ async function shareOrCopy(data: { title: string; text: string; url: string }): 
 }
 
 export async function sendRecipe(r: Recipe): Promise<ShareOutcome> {
-  const url = await buildRecipeLink(r);
-  return shareOrCopy({ title: r.title, text: `Here's a recipe for you: ${r.title}`, url });
+  const code = await buildRecipeCode(r);
+  const text =
+    `Here's a recipe for you: ${r.title}\n\n` +
+    `To save it: open Jasmine's Recipe Box, tap Import, and paste this whole message.\n\n` +
+    `Recipe code:\n${code}`;
+  return shareOrCopy({ title: r.title, text });
 }
-
 export function shareApp(): Promise<ShareOutcome> {
   return shareOrCopy({ title: "Jasmine's Recipe Box", text: "Jasmine's Recipe Box", url: appAddress() });
 }
+
