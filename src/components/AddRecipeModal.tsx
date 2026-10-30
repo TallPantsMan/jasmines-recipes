@@ -3,6 +3,7 @@ import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../t
 import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl } from '../services/recipeParser';
 import { processCookbookImage, type OcrProgress } from '../services/ocrService';
 import { fetchPageHtml } from '../services/pageFetcher';
+import { refineWithAi } from '../services/aiClean';
 import {
   X, Globe, BookOpen, PenTool, Sparkles,
   Camera, Loader2, Bookmark, ExternalLink
@@ -42,6 +43,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [isPullingInstagram, setIsPullingInstagram] = useState(false);
   const [instagramError, setInstagramError] = useState<string | null>(null);
   const [showManualCaptionFallback, setShowManualCaptionFallback] = useState(false);
+  const [isTidyingText, setIsTidyingText] = useState(false);
 
   const [pastedText, setPastedText] = useState('');
   const [pastedTitle, setPastedTitle] = useState('');
@@ -178,9 +180,11 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   };
 
   // 3. Instagram / Text Parser
-  const handleParseText = () => {
-    if (!pastedText.trim()) return;
-    const { creator, ...parsed } = parseRawRecipeText(pastedText, pastedTitle);
+  const handleParseText = async () => {
+    if (!pastedText.trim() || isTidyingText) return;
+    setIsTidyingText(true);
+    const { creator, ...parsed } = await refineWithAi(pastedText, parseRawRecipeText(pastedText, pastedTitle));
+    setIsTidyingText(false);
     setSourceType('instagram');
     applyParsedRecipe({
       ...parsed,
@@ -532,7 +536,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                     <button
                       type="button"
                       onClick={handleParseText}
-                      disabled={!pastedText.trim()}
+                      disabled={!pastedText.trim() || isTidyingText}
                       className="w-full py-3 px-4 rounded-2xl bg-[#221E1B] hover:bg-[#38332E] disabled:opacity-40 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
                     >
                       <Sparkles className="w-4 h-4 text-[#FF5B26]" />

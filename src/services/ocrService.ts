@@ -1,5 +1,6 @@
 import { createWorker } from 'tesseract.js';
 import { parseRawRecipeText } from './recipeParser';
+import { refineWithAi } from './aiClean';
 import type { Recipe } from '../types/recipe';
 
 export interface OcrProgress {
@@ -26,7 +27,7 @@ export async function processCookbookImage(
 
   await worker.terminate();
 
-  const parsed = parseRawRecipeText(text, undefined, { source: 'cookbook' });
+  const { creator: _creator, ...parsed } = await refineWithAi(text, parseRawRecipeText(text, undefined, { source: 'cookbook' }));
   parsed.sourceType = 'cookbook';
 
   return {

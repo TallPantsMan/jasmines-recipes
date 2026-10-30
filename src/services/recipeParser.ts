@@ -3,6 +3,7 @@ import { parseRawRecipeText, inferCategories } from './captionParser';
 import { fetchInstagramCover } from './imageService';
 import { fetchPageHtml } from './pageFetcher';
 import { apiFetch } from './auth';
+import { refineWithAi } from './aiClean';
 
 /**
  * Converts a recipe duration into minutes. Handles ISO 8601 ("PT25M", "PT1H15M", "PT01H15M",
@@ -314,8 +315,8 @@ export async function fetchInstagramRecipeFromUrl(inputUrlOrText: string): Promi
   const userMatch = targetUrl.match(/instagram\.com\/([A-Za-z0-9_.-]+)\/(?:reel|p)\//);
   const urlHandle = userMatch && !['p', 'reel', 'reels', 'share', 'tv'].includes(userMatch[1]) ? `@${userMatch[1]}` : '';
 
-  const buildResult = (caption: string, handle: string, cover: string | undefined): InstagramFetchResult => {
-    const { creator, ...parsed } = parseRawRecipeText(caption, undefined, { source: 'instagram' });
+  const buildResult = async (caption: string, handle: string, cover: string | undefined): Promise<InstagramFetchResult> => {
+    const { creator, ...parsed } = await refineWithAi(caption, parseRawRecipeText(caption, undefined, { source: 'instagram' }));
     const poster = handle || urlHandle;
     const credited = creator && poster && creator.toLowerCase() !== poster.replace(/^@/, '').toLowerCase() ? `@${creator}` : '';
     const sourceName = credited ? `${credited} via ${poster}` : poster || (creator ? `@${creator}` : 'Instagram Reel');
