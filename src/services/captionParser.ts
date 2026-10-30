@@ -221,15 +221,18 @@ const QTY_TOKEN = /^(?:\d+(?:[.,]\d+)?|\d+\/\d+|[½¼¾⅓⅔⅛])$/;
 function splitRunOnIngredients(text: string): string[] {
   const tokens = text.split(/\s+/);
   const items: string[][] = [[]];
+  let depth = 0; // a quantity inside brackets, like "(about 4 lb)", belongs to the item it describes
   tokens.forEach((tok, idx) => {
     const cur = items[items.length - 1];
     const prev = tokens[idx - 1] || '';
     const next = tokens[idx + 1] || '';
     const startsNewItem =
-      QTY_TOKEN.test(tok) && cur.length >= 2 && !QTY_TOKEN.test(prev) && !/^(?:to|-|–|and|or|x|plus)$/i.test(prev) &&
+      depth === 0 && QTY_TOKEN.test(tok) && cur.length >= 2 && !QTY_TOKEN.test(prev) &&
+      !/^(?:to|-|–|and|or|x|plus|about|around|approx\.?|approximately|roughly|~|of)$/i.test(prev) &&
       /^[A-Za-z]/.test(next) && !TIME_WORDS.test(next);
     if (startsNewItem) items.push([tok]);
     else cur.push(tok);
+    depth = Math.max(0, depth + (tok.match(/\(/g) || []).length - (tok.match(/\)/g) || []).length);
   });
   return items.map((t) => t.join(' ')).filter(Boolean);
 }
@@ -280,9 +283,31 @@ const minutesFrom = (n: string, unit: string) => Math.round(parseFloat(n) * (/^h
 
 type Section = 'header' | 'ingredients' | 'instructions' | 'notes' | 'auto';
 
+/**
+ * Cookbook photos come back as text with the page's line wraps: one sentence broken over two lines, a bracket
+ * opened on one line and closed on the next, bullets read as "«" or "¢", "lb" read as "Ib". This puts that right
+ * before the normal parsing.
+ */
+function tidyOcrText(text: string): string {
+  const unclosedBracket = (s: string) => (s.match(/\(/g) || []).length > (s.match(/\)/g) || []).length;
+  const out: string[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/(\d)\s*Ib\b/g, '$1 lb').replace(/^\s*[«»¢‹›©®]\s*/, '• ').trimEnd();
+    const prev = out[out.length - 1];
+    const startsNewItem = BULLET_LEAD.test(line) || STEP_LEAD.test(line);
+    const continues =
+      prev !== undefined && prev.trim() !== '' && line.trim() !== '' && !startsNewItem &&
+      (unclosedBracket(prev) || (prev.trim().length >= 40 && !/[.!?:;)]$/.test(prev.trim()) && /^[a-z(]/.test(line.trim())));
+    if (continues) out[out.length - 1] = `${prev.trimEnd()} ${line.trim()}`;
+    else out.push(line);
+  }
+  return out.join('\n');
+}
+
 export function parseRawRecipeText(text: string, titleHint?: string, options: ParseTextOptions = {}): ParsedCaption {
   const source = options.source || 'instagram';
-  const lines = normalizeText(text).split('\n');
+  const normalized = normalizeText(text);
+  const lines = (source === 'cookbook' ? tidyOcrText(normalized) : normalized).split('\n');
 
   let section: Section = 'header';
   let title = titleHint ? cleanTitle(titleHint) : '';

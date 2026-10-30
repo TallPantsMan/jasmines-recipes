@@ -1,12 +1,13 @@
 ﻿import React, { useState } from 'react';
 import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../types/recipe';
 import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl } from '../services/recipeParser';
-import { processCookbookImage, type OcrProgress } from '../services/ocrService';
+import { processCookbookImages, type OcrProgress } from '../services/ocrService';
+import { fileToCompressedDataUrl } from '../services/imageService';
 import { fetchPageHtml } from '../services/pageFetcher';
 import { refineWithAi } from '../services/aiClean';
 import {
   X, Globe, BookOpen, PenTool, Sparkles,
-  Camera, Loader2, Bookmark, ExternalLink
+  Camera, ImagePlus, Loader2, Bookmark, ExternalLink
 } from 'lucide-react';
 import { InstagramIcon } from './Icons';
 
@@ -74,7 +75,10 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   );
 
   const [initialJasmineNote, setInitialJasmineNote] = useState('');
-  const [cookbookPhotoPreview, setCookbookPhotoPreview] = useState<string | null>(null);
+  // Cookbook scan: any number of page photos, plus an optional photo of the finished dish
+  const [cookbookPages, setCookbookPages] = useState<Array<{ id: string; file: File; preview: string }>>([]);
+  const [cookbookFood, setCookbookFood] = useState<{ file: File; preview: string } | null>(null);
+  const [cookbookPageData, setCookbookPageData] = useState<string[]>([]);
 
   // Apply parsed recipe to form
   const applyParsedRecipe = (parsed: Partial<Recipe>) => {
@@ -195,28 +199,75 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   };
 
   // 3. Cookbook OCR
-  const handleImageOcr = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const addCookbookPages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // lets the same photo be picked again
+    if (files.length === 0) return;
+    setCookbookPages((prev) => [
+      ...prev,
+      ...files.map((file, i) => ({ id: `${Date.now()}-${prev.length + i}`, file, preview: URL.createObjectURL(file) })),
+    ]);
+  };
+
+  const removeCookbookPage = (id: string) => {
+    setCookbookPages((prev) => {
+      const gone = prev.find((p) => p.id === id);
+      if (gone) URL.revokeObjectURL(gone.preview);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
+  const moveCookbookPage = (id: string, direction: -1 | 1) => {
+    setCookbookPages((prev) => {
+      const from = prev.findIndex((p) => p.id === id);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  };
+
+  const setCookbookFoodPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+    setCookbookFood((prev) => {
+      if (prev) URL.revokeObjectURL(prev.preview);
+      return { file, preview: URL.createObjectURL(file) };
+    });
+  };
+
+  const handleCookbookScan = async () => {
+    if (cookbookPages.length === 0 || isProcessingOcr) return;
 
     setIsProcessingOcr(true);
-    setOcrProgress({ status: 'Reading photo...', progress: 0.1 });
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setCookbookPhotoPreview(ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    setOcrProgress({ status: 'Reading photo...', progress: 0.05 });
 
     try {
-      const { parsedRecipe } = await processCookbookImage(file, (p) => {
-        setOcrProgress(p);
-      });
+      const { parsedRecipe, rawText } = await processCookbookImages(
+        cookbookPages.map((p) => p.file),
+        (p) => setOcrProgress(p)
+      );
+      if (rawText.replace(/\s/g, '').length < 20) {
+        alert("We couldn't read any text in these photos. Try a clearer shot with good lighting, held straight above the page.");
+        return;
+      }
+      // Small copies of the pages are kept on the recipe for reference; the food photo becomes its cover
+      const [pages, cover] = await Promise.all([
+        Promise.all(cookbookPages.map((p) => fileToCompressedDataUrl(p.file, 1400, 0.7))),
+        cookbookFood ? fileToCompressedDataUrl(cookbookFood.file) : Promise.resolve(''),
+      ]);
+      setCookbookPageData(pages.filter(Boolean));
       setSourceType('cookbook');
-      applyParsedRecipe({ ...parsedRecipe, sourceName: sourceName || 'Cookbook Recipe' });
+      applyParsedRecipe({
+        ...parsedRecipe,
+        sourceName: sourceName || 'Cookbook Recipe',
+        coverImage: cover || undefined,
+      });
     } catch (err) {
       console.error(err);
-      alert('OCR failed to read text from this image. Try a clearer shot with good lighting!');
+      alert('Reading the photos failed. Try clearer shots with good lighting!');
     } finally {
       setIsProcessingOcr(false);
       setOcrProgress(null);
@@ -260,10 +311,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       .map(t => t.trim().replace(/^#/, ''))
       .filter(t => t.length > 0);
 
-    const userPhotos: string[] = initialRecipe?.userPhotos || [];
-    if (cookbookPhotoPreview) {
-      userPhotos.push(cookbookPhotoPreview);
-    }
+    const userPhotos: string[] = [...(initialRecipe?.userPhotos || []), ...cookbookPageData];
 
     const newRecipe: Recipe = {
       id: initialRecipe?.id || `recipe-${Date.now()}`,
@@ -272,7 +320,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       sourceType,
       sourceName: sourceName.trim() || undefined,
       sourceUrl: sourceUrl.trim() || undefined,
-      coverImage: coverImage.trim() || (cookbookPhotoPreview || undefined),
+      coverImage: coverImage.trim() || undefined,
       userPhotos,
       servings: Number(servings) || 4,
       prepTimeMinutes: prepTimeMinutes ? Number(prepTimeMinutes) : undefined,
@@ -555,31 +603,95 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                 <BookOpen className="w-6 h-6 stroke-[2.2]" />
               </div>
               <h3 className="font-serif text-lg font-bold text-[#221E1B]">
-                Scan a Cookbook Page
+                Scan a Cookbook Recipe
               </h3>
               <p className="text-xs text-[#7A7165] max-w-md mx-auto">
-                Snap a clear photo of any page from your favorite cookbook or recipe card.
+                Take a photo of each page the recipe is on. Add as many as you need, in order. You can also add a photo of the finished dish.
               </p>
 
-              <div className="pt-2">
-                <label className="inline-flex flex-col items-center justify-center w-full p-6 sm:p-8 border-2 border-dashed border-[#DFD5C7] rounded-3xl bg-white hover:bg-[#FFF8F5] cursor-pointer transition-all">
-                  <Camera className="w-9 h-9 text-amber-700 mb-2" />
-                  <span className="text-sm font-bold text-[#221E1B]">
-                    Take Photo or Upload Image
-                  </span>
-                  <span className="text-xs text-[#8A8072] mt-1">
-                    PNG, JPG, or HEIC
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleImageOcr}
-                    className="hidden"
-                  />
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-[#DFD5C7] rounded-2xl bg-white hover:bg-[#FFF8F5] cursor-pointer transition-all">
+                  <Camera className="w-7 h-7 text-amber-700 mb-1.5" />
+                  <span className="text-xs font-bold text-[#221E1B]">Take a photo</span>
+                  <input type="file" accept="image/*" capture="environment" onChange={addCookbookPages} className="hidden" />
+                </label>
+                <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-[#DFD5C7] rounded-2xl bg-white hover:bg-[#FFF8F5] cursor-pointer transition-all">
+                  <ImagePlus className="w-7 h-7 text-amber-700 mb-1.5" />
+                  <span className="text-xs font-bold text-[#221E1B]">Choose photos</span>
+                  <input type="file" accept="image/*" multiple onChange={addCookbookPages} className="hidden" />
                 </label>
               </div>
 
+              {cookbookPages.length > 0 && (
+                <div className="text-left space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#665D52]">
+                    Recipe pages ({cookbookPages.length})
+                  </p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                    {cookbookPages.map((page, index) => (
+                      <div key={page.id} className="relative rounded-xl overflow-hidden border border-[#DFD5C7] bg-white">
+                        <img src={page.preview} alt={`Page ${index + 1}`} className="w-full h-24 object-cover" />
+                        <span className="absolute top-1 left-1 bg-[#221E1B]/80 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                          {index + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeCookbookPage(page.id)}
+                          aria-label={`Remove page ${index + 1}`}
+                          className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5 text-[#221E1B]" />
+                        </button>
+                        {cookbookPages.length > 1 && (
+                          <div className="flex justify-between px-1.5 py-1 text-[11px] font-bold text-[#665D52]">
+                            <button type="button" disabled={index === 0} onClick={() => moveCookbookPage(page.id, -1)} aria-label="Move earlier" className="disabled:opacity-30 cursor-pointer px-1">←</button>
+                            <button type="button" disabled={index === cookbookPages.length - 1} onClick={() => moveCookbookPage(page.id, 1)} aria-label="Move later" className="disabled:opacity-30 cursor-pointer px-1">→</button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-left space-y-2 pt-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#665D52]">
+                  Photo of the finished dish <span className="font-medium normal-case tracking-normal">(optional, becomes the cover)</span>
+                </p>
+                {cookbookFood ? (
+                  <div className="flex items-center gap-3">
+                    <img src={cookbookFood.preview} alt="Finished dish" className="w-20 h-20 rounded-xl object-cover border border-[#DFD5C7]" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        URL.revokeObjectURL(cookbookFood.preview);
+                        setCookbookFood(null);
+                      }}
+                      className="text-xs font-bold text-[#C73B0D] cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-[#DFD5C7] bg-white text-xs font-bold text-[#544C42] hover:bg-[#FFF8F5] cursor-pointer transition-all">
+                    <Camera className="w-4 h-4 text-amber-700" />
+                    Add a food photo
+                    <input type="file" accept="image/*" onChange={setCookbookFoodPhoto} className="hidden" />
+                  </label>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCookbookScan}
+                disabled={cookbookPages.length === 0 || isProcessingOcr}
+                className="w-full py-3 px-4 rounded-2xl bg-[#221E1B] hover:bg-[#38332E] disabled:opacity-40 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                {cookbookPages.length === 0
+                  ? 'Add a photo to begin'
+                  : `Read recipe from ${cookbookPages.length} photo${cookbookPages.length === 1 ? '' : 's'}`}
+              </button>
               {isProcessingOcr && ocrProgress && (
                 <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-left space-y-2">
                   <div className="flex items-center justify-between text-xs font-bold text-amber-900">
@@ -861,3 +973,4 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     </div>
   );
 };
+

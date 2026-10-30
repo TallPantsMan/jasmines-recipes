@@ -33,6 +33,12 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
     r.readAsDataURL(blob);
   });
 
+/** A photo from the camera or gallery, shrunk so it stays small enough to save. */
+export async function fileToCompressedDataUrl(file: File, maxWidth = 900, quality = 0.8): Promise<string> {
+  const raw = await blobToDataUrl(file);
+  return raw ? compressImageDataUrl(raw, maxWidth, quality) : '';
+}
+
 /**
  * Gets the cover image (post thumbnail / reel cover) for an Instagram link as a
  * persistent data URL. Tries our serverless endpoint first, then a public proxy.
