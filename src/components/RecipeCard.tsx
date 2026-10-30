@@ -7,6 +7,8 @@ import { formatMinutes } from '../utils/formatTime';
 
 interface RecipeCardProps {
   recipe: Recipe;
+  /** Who imported it (the box's owner when an older recipe doesn't say) */
+  importedBy: string;
   onSelect: (recipe: Recipe) => void;
   onToggleFavorite: (e: React.MouseEvent, id: string) => void;
   onToggleWantToTry: (e: React.MouseEvent, id: string) => void;
@@ -15,6 +17,7 @@ interface RecipeCardProps {
 
 export const RecipeCard: React.FC<RecipeCardProps> = ({
   recipe,
+  importedBy,
   onSelect,
   onToggleFavorite,
   onToggleWantToTry,
@@ -149,6 +152,8 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
               by <span className="text-[#3D372F]">{recipe.sourceName}</span>
             </p>
           )}
+
+          <p className="text-[11px] text-[#A09587] mt-0.5 font-medium">Added by {importedBy}</p>
 
           {/* Description */}
           {recipe.description && (

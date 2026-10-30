@@ -13,6 +13,7 @@ import {
 
 interface RecipeDetailModalProps {
   recipe: Recipe;
+  importedBy: string;
   onClose: () => void;
   onEdit: (recipe: Recipe) => void;
   onDelete: (id: string) => void;
@@ -31,6 +32,7 @@ interface RecipeDetailModalProps {
 
 export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   recipe,
+  importedBy,
   onClose,
   onEdit,
   onDelete,
@@ -308,6 +310,8 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                     )}
                   </div>
                 )}
+
+                <div className="mt-1 text-xs text-[#7D7366] font-medium">Added by <span className="font-bold text-[#221E1B]">{importedBy}</span></div>
 
                 {recipe.description && (
                   <p className="mt-2.5 text-xs sm:text-sm text-[#544C42] leading-relaxed">

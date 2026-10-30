@@ -406,6 +406,8 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       favorite: initialRecipe?.favorite || false,
       wantToTry,
       folders: initialRecipe?.folders,
+      importedBy: initialRecipe?.importedBy,
+      nutrition: initialRecipe?.nutrition,
       createdAt: initialRecipe?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

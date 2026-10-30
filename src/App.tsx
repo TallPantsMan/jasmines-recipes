@@ -383,6 +383,7 @@ export function App({ profile }: { profile: ProfileName }) {
   };
 
   const handleSaveRecipe = async (recipe: Recipe) => {
+    if (!recipe.importedBy) recipe = { ...recipe, importedBy: profile };
     await RecipeService.saveRecipe(recipe);
     backupRecipe(recipe);
     setRecipes(prev => {
@@ -488,6 +489,7 @@ export function App({ profile }: { profile: ProfileName }) {
               <RecipeCard
                 key={recipe.id}
                 recipe={recipe}
+                importedBy={recipe.importedBy || profile}
                 onSelect={(r) => setActiveRecipe(r)}
                 onToggleFavorite={handleToggleFavorite}
                 onToggleWantToTry={handleToggleWantToTry}
@@ -590,6 +592,7 @@ export function App({ profile }: { profile: ProfileName }) {
       {activeRecipe && (
         <RecipeDetailModal
           recipe={activeRecipe}
+          importedBy={activeRecipe.importedBy || profile}
           onClose={() => setActiveRecipe(null)}
           onEdit={(r) => {
             setEditingRecipe(r);

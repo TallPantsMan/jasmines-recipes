@@ -55,6 +55,8 @@ export interface Recipe {
   rating: number;
   favorite: boolean;
   wantToTry?: boolean;
+  /** Which family member imported this recipe (Jasmine, Leslie or Alex) */
+  importedBy?: string;
   /** AI estimate per serving, worked out from the ingredients */
   nutrition?: Nutrition;
   /** Cookbook folders (made by the family, e.g. "Holidays") this recipe has been put in */
