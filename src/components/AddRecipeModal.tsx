@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState } from 'react';
 import { notify } from '../services/dialog';
 import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../types/recipe';
 import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl, fetchVideoRecipeFromUrl, isVideoLink, pageTextFromHtml } from '../services/recipeParser';
