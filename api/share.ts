@@ -5,7 +5,7 @@ import { requireLogin } from './_auth.js';
 // Google Sheet, in the same place the backups go, under a code like JR-K7F3QZ.
 const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // no 0/O or 1/I, which are easy to mix up
 const CODE_LENGTH = 6;
-const MAX_PAYLOAD = 45000;
+const MAX_PAYLOAD = 135000; // the Sheet keeps it in up to three 45,000-character cells; room for a small cover photo
 
 const newCode = () => 'JR-' + Array.from({ length: CODE_LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
 

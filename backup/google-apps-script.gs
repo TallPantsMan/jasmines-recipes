@@ -87,7 +87,9 @@ function findCode(sheet, code) {
 function shareRecipe(data) {
   var sheet = sharedSheet();
   if (findCode(sheet, data.code)) return reply({ ok: false, error: 'taken' });
-  sheet.getRange(sheet.getLastRow() + 1, 1, 1, 3).setValues([[data.code, new Date().toISOString(), data.payload]]);
+  // A recipe with a cover photo is longer than one cell holds, so it is kept in up to three pieces
+  var p = String(data.payload);
+  sheet.getRange(sheet.getLastRow() + 1, 1, 1, 5).setValues([[data.code, new Date().toISOString(), p.substr(0, 45000), p.substr(45000, 45000), p.substr(90000, 45000)]]);
   return reply({ ok: true });
 }
 
@@ -95,7 +97,7 @@ function fetchShared(data) {
   var sheet = sharedSheet();
   var row = findCode(sheet, data.code);
   if (!row) return reply({ ok: false, error: 'not_found' });
-  return reply({ ok: true, payload: sheet.getRange(row, 3).getValue() });
+  return reply({ ok: true, payload: sheet.getRange(row, 3, 1, 3).getValues()[0].join('') });
 }
 
 /**
@@ -171,6 +173,86 @@ function syncPut(data) {
     sheet.getRange(sheet.getLastRow() + 1, 1, appended.length, appended[0].length).setValues(appended);
   }
   return reply({ ok: true, saved: data.items.length });
+}
+
+/**
+ * Tidy-up helpers. Run these by hand from the editor (pick the name in the dropdown, then Run).
+ * dedupeProfiles: if the same recipe is listed twice for one person, keeps the most recently edited copy.
+ * formatAll: makes the tabs easy to read (colours, column widths, technical columns tucked away, sorted).
+ */
+function dedupeProfiles() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = profilesSheet();
+    if (sheet.getLastRow() < 2) return;
+    var top = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+    var newest = {};
+    top.forEach(function (r, i) {
+      var key = r[0] + '|' + r[1];
+      if (!newest[key] || String(r[2]) > String(top[newest[key] - 2][2])) newest[key] = i + 2;
+    });
+    var drop = [];
+    top.forEach(function (r, i) {
+      var key = r[0] + '|' + r[1];
+      if (newest[key] !== i + 2 || r[1] === 'zz-sync-test') drop.push(i + 2);
+    });
+    drop.sort(function (a, b) { return b - a; }).forEach(function (row) { sheet.deleteRow(row); });
+    Logger.log('Removed ' + drop.length + ' rows');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function styleSheet(sheet, widths, hiddenCols) {
+  var maxRows = sheet.getMaxRows();
+  var maxCols = sheet.getMaxColumns();
+  var all = sheet.getRange(1, 1, maxRows, maxCols);
+  all.setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle').setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  sheet.getBandings().forEach(function (b) { b.remove(); });
+  sheet.getRange(1, 1, maxRows, widths.length).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false)
+    .setHeaderRowColor('#FF5B26').setFirstRowColor('#FFFFFF').setSecondRowColor('#FFF4EE');
+  sheet.getRange(1, 1, 1, widths.length).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(11);
+  sheet.setRowHeight(1, 32);
+  sheet.setFrozenRows(1);
+  widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+  (hiddenCols || []).forEach(function (c) { sheet.hideColumns(c); });
+}
+
+function formatAll() {
+  var book = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Profiles: one row per recipe per person. The JSON pieces (F:O) and the id are tucked away.
+  var prof = profilesSheet();
+  if (prof.getLastRow() > 2) {
+    prof.getRange(2, 1, prof.getLastRow() - 1, prof.getLastColumn())
+      .sort([{ column: 1, ascending: true }, { column: 4, ascending: true }, { column: 5, ascending: true }]);
+  }
+  styleSheet(prof, [90, 120, 170, 70, 300, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80], [2, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+  prof.setTabColor('#FF5B26');
+  prof.getRange(1, 3, prof.getMaxRows(), 1).setFontColor('#6E6457');
+  prof.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$D2="yes"')
+      .setFontColor('#B5ADA1').setStrikethrough(true).setRanges([prof.getRange(2, 1, prof.getMaxRows() - 1, 5)]).build()
+  ]);
+
+  // Recipes: the backup copy from each device. Device ID, recipe id and the raw JSON are hidden.
+  var rec = book.getSheetByName(TAB_NAME);
+  if (rec) {
+    var widths = [150, 90, 170, 130, 240, 90, 150, 200, 70, 70, 70, 140, 140, 70, 80, 60, 300, 300, 300, 200, 150, 150, 120];
+    styleSheet(rec, widths, [2, 4, 23]);
+    rec.setTabColor('#8A8072');
+  }
+
+  // Shared: short codes for recipes being sent. The squeezed text is tucked away.
+  var shared = sharedSheet();
+  shared.getRange(1, 1, 1, 5).setValues([['Code', 'Created', 'Recipe (squeezed text)', 'Part 2', 'Part 3']]);
+  styleSheet(shared, [110, 180, 120, 80, 80], [3, 4, 5]);
+  shared.setTabColor('#C9BFAF');
+
+  // Tab order: Profiles first
+  book.setActiveSheet(prof);
+  book.moveActiveSheet(1);
 }
 
 function reply(obj) {

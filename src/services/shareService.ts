@@ -23,7 +23,7 @@ interface SharedPayload {
   u?: string;          // source link
   a?: string;          // source name
   y?: RecipeSourceType; // source type
-  f?: string;          // cover image, only when it's a web address
+  f?: string;          // cover image: a web address, or (short codes only) a small photo kept inside the code
   l?: 'Easy' | 'Medium' | 'Advanced';
 }
 
@@ -87,6 +87,41 @@ export function recipeToPayload(r: Recipe): SharedPayload {
   return p;
 }
 
+const SMALL_PHOTO = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const MAX_PHOTO_CHARS = 90000;
+
+/** Shrinks a saved cover photo to a small JPEG that fits inside a short code. Returns null if it can't. */
+function makeThumbnail(dataUrl: string, maxSide = 420, quality = 0.6): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const out = canvas.toDataURL('image/jpeg', quality);
+        resolve(out.length <= MAX_PHOTO_CHARS ? out : null);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+/** What goes into a short code: the recipe, plus a small copy of its cover photo when it has one saved on this device. */
+export async function recipeToSharePayload(r: Recipe): Promise<SharedPayload> {
+  const payload = recipeToPayload(r);
+  if (!payload.f && r.coverImage && r.coverImage.startsWith('data:image')) {
+    const thumb = await makeThumbnail(r.coverImage);
+    if (thumb) payload.f = thumb;
+  }
+  return payload;
+}
+
 /** Turns what arrived in a link back into a brand new recipe for this device, checking it's a sane recipe first. */
 export function payloadToRecipe(data: unknown): Recipe | null {
   if (!data || typeof data !== 'object') return null;
@@ -100,7 +135,8 @@ export function payloadToRecipe(data: unknown): Recipe | null {
   const stamp = Date.now();
   const types: RecipeSourceType[] = ['website', 'instagram', 'video', 'cookbook', 'family', 'manual'];
   const sourceType = types.includes(p.y as RecipeSourceType) ? (p.y as RecipeSourceType) : 'manual';
-  const cover = clean(p.f, 2000);
+  const coverRaw = typeof p.f === 'string' ? p.f.trim() : '';
+  const cover = SMALL_PHOTO.test(coverRaw) && coverRaw.length <= MAX_PHOTO_CHARS + 100 ? coverRaw : clean(p.f, 2000);
   const link = clean(p.u, 2000);
 
   return {
@@ -110,7 +146,7 @@ export function payloadToRecipe(data: unknown): Recipe | null {
     sourceType,
     sourceUrl: /^https?:\/\//.test(link) ? link : undefined,
     sourceName: clean(p.a, 200) || undefined,
-    coverImage: /^https?:\/\//.test(cover) ? cover : undefined,
+    coverImage: /^https?:\/\//.test(cover) || SMALL_PHOTO.test(cover) ? cover : undefined,
     userPhotos: [],
     servings: num(p.s) || 4,
     prepTimeMinutes: num(p.p),
@@ -224,9 +260,13 @@ const fingerprint = (text: string): string => {
   return `${text.length}:${h}`;
 };
 
+// Includes the cover photo, so adding or changing one makes a fresh code that carries it
+const codeHash = (r: Recipe): string =>
+  fingerprint(JSON.stringify(recipeToPayload(r)) + (r.coverImage?.startsWith('data:image') ? `|photo:${fingerprint(r.coverImage)}` : ''));
+
 const cachedShortCode = (r: Recipe): string | null => {
   const hit = loadCodeCache()[r.id];
-  return hit && hit.hash === fingerprint(JSON.stringify(recipeToPayload(r))) ? hit.code : null;
+  return hit && hit.hash === codeHash(r) ? hit.code : null;
 };
 
 /** True when Send can open straight away because the short code is already made. */
@@ -237,16 +277,22 @@ async function shortCodeFor(r: Recipe): Promise<string | null> {
   const ready = cachedShortCode(r);
   if (ready) return ready;
   try {
-    const payload = recipeToPayload(r);
+    const payload = await recipeToSharePayload(r);
+    let packed = await pack(payload);
+    // A photo that makes the code too big for the Sheet is dropped; the recipe still goes
+    if (packed.length > 130000 && payload.f?.startsWith('data:')) {
+      delete payload.f;
+      packed = await pack(payload);
+    }
     const res = await apiFetch('/api/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payload: await pack(payload) }),
+      body: JSON.stringify({ payload: packed }),
     });
     if (!res.ok) return null;
     const { code } = await res.json();
     if (typeof code !== 'string' || !code) return null;
-    rememberCode(r.id, fingerprint(JSON.stringify(payload)), code);
+    rememberCode(r.id, codeHash(r), code);
     return code;
   } catch {
     return null;
