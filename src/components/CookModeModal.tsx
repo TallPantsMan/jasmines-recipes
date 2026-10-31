@@ -133,12 +133,12 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
     <div style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }} className="fixed inset-0 z-[60] bg-[#191614] text-[#FAF8F5] flex flex-col justify-between overflow-hidden select-none animate-in fade-in duration-200">
       
       {/* Top Header Bar */}
-      <header className="px-4 sm:px-6 py-3 border-b border-white/10 flex items-center justify-between bg-black/40 backdrop-blur-md">
-        <div className="flex items-center gap-2 sm:gap-3">
+      <header className="px-3 sm:px-6 py-3 border-b border-white/10 flex items-center justify-between gap-2 bg-black/40 backdrop-blur-md">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* Mobile Portrait Ingredients toggle */}
           <button
             onClick={() => setShowPortraitIngredients(!showPortraitIngredients)}
-            className={`landscape:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+            className={`landscape:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border whitespace-nowrap transition-all ${
               showPortraitIngredients
                 ? 'bg-[#FF5B26] border-[#FF5B26] text-white'
                 : 'bg-white/10 hover:bg-white/20 border-white/15 text-white'
@@ -154,18 +154,19 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
           </span>
 
           {wakeLockActive && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
+            <span title="Screen stays awake" className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-400/10 p-1.5 sm:px-2.5 sm:py-0.5 rounded-full border border-amber-400/20 whitespace-nowrap">
               <Sun className="w-3 h-3" />
-              <span>Screen Awake</span>
+              <span className="hidden sm:inline">Screen Awake</span>
             </span>
           )}
         </div>
 
-        <div className="text-center font-serif text-xs sm:text-base font-bold text-white/90 truncate max-w-[160px] sm:max-w-md">
+        {/* On a phone there's no room for the name up here, so it sits above the step instead */}
+        <div className="hidden sm:block flex-1 min-w-0 text-center font-serif text-base font-bold text-white/90 truncate">
           {recipe.title}
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <div className="flex items-center rounded-full bg-white/10 text-white font-bold">
             <button
               onClick={() => changeTextSize(-1)}
@@ -233,6 +234,8 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
         {/* STEP DISPLAY AREA */}
         <div className="flex-1 flex flex-col justify-center items-center px-6 sm:px-12 landscape:px-10 py-6 max-w-4xl mx-auto text-center overflow-y-auto">
           
+          <div className="sm:hidden mb-3 max-w-full truncate font-serif text-sm font-bold text-white/60">{recipe.title}</div>
+
           {/* ReciMe Orange Step Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#FF5B26]/20 border border-[#FF5B26]/40 text-[#FF7A4D] text-xs font-bold uppercase tracking-wider mb-4 sm:mb-6">
             <span>Step {currentStepIndex + 1} of {totalSteps}</span>
@@ -320,18 +323,24 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
       </div>
 
       {/* Bottom Navigation */}
-      <footer className="px-4 sm:px-6 py-3.5 sm:py-4 bg-black/40 border-t border-white/10 flex items-center justify-between gap-4">
+      <footer className="px-3 sm:px-6 py-3.5 sm:py-4 bg-black/40 border-t border-white/10 flex items-center justify-between gap-3 sm:gap-4">
         <button
           onClick={handlePrev}
           disabled={currentStepIndex === 0}
-          className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none text-white font-bold text-xs sm:text-sm transition-all cursor-pointer"
+          title="Previous step"
+          className="shrink-0 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none text-white font-bold text-xs sm:text-sm transition-all cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" />
-          <span>Previous</span>
+          <span className="hidden min-[400px]:inline">Previous</span>
         </button>
 
+        {/* Phones: a slim progress bar, since a dot per step doesn't fit */}
+        <div className="sm:hidden flex-1 min-w-0 h-1.5 rounded-full bg-white/15 overflow-hidden">
+          <div className="h-full rounded-full bg-[#FF5B26] transition-all" style={{ width: `${((currentStepIndex + 1) / Math.max(totalSteps, 1)) * 100}%` }} />
+        </div>
+
         {/* ReciMe Progress Dots */}
-        <div className="flex items-center gap-1 sm:gap-1.5">
+        <div className="hidden sm:flex items-center gap-1 sm:gap-1.5 min-w-0 overflow-hidden">
           {recipe.instructions.map((_, i) => (
             <button
               key={i}
@@ -349,7 +358,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
 
         <button
           onClick={handleNext}
-          className={`flex items-center gap-1.5 sm:gap-2 px-5 sm:px-7 py-2.5 sm:py-3 rounded-2xl font-bold text-xs sm:text-sm shadow-lg transition-all cursor-pointer ${
+          className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 px-4 sm:px-7 py-2.5 sm:py-3 rounded-2xl font-bold text-xs sm:text-sm shadow-lg transition-all cursor-pointer ${
             isLastStep
               ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 active:scale-95'
               : 'bg-[#FF5B26] hover:bg-[#E84D1B] text-white shadow-[#FF5B26]/30 active:scale-95'
