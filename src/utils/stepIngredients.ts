@@ -1,4 +1,4 @@
-import type { Ingredient } from '../types/recipe';
+import type { Ingredient, InstructionStep, Recipe } from '../types/recipe';
 import { scaleIngredient } from './scaleIngredient';
 
 // Words that say how much or how it's prepared, not what the ingredient is
@@ -41,9 +41,13 @@ export function stepIngredients(stepText: string, ingredients: Ingredient[], fac
   const lower = stepText.toLowerCase();
   const words = new Set((lower.match(/[a-zà-ÿ]+/g) || []).map(stem));
   const cores = ingredients.map((i) => coreWords(i.raw));
-  // How many ingredients start with each word: "beef" is only a safe nickname for "beef flank" if nothing else starts with it
-  const firstCount = new Map<string, number>();
-  for (const c of cores) if (c[0]) firstCount.set(c[0], (firstCount.get(c[0]) || 0) + 1);
+  // How many ingredients use each word: "gorgonzola" is a safe nickname for "crumbled Gorgonzola cheese" if no other
+  // ingredient uses that word (while "cheese" alone, used by several, is not)
+  const wordCount = new Map<string, number>();
+  for (const c of cores) for (const w of new Set(c)) wordCount.set(w, (wordCount.get(w) || 0) + 1);
+  // How many ingredients END with each word ("brown sugar" and "white sugar" both end with "sugar")
+  const lastCount = new Map<string, number>();
+  for (const c of cores) if (c.length > 0) lastCount.set(c[c.length - 1], (lastCount.get(c[c.length - 1]) || 0) + 1);
 
   // Ingredients that match, grouped by name (recipes often list the same thing twice: once for the marinade, once for the sauce)
   const groups = new Map<string, Array<{ raw: string; score: number }>>();
@@ -52,12 +56,14 @@ export function stepIngredients(stepText: string, ingredients: Ingredient[], fac
     if (core.length === 0) return;
     const all = core.every((w) => words.has(w));
     const last = core[core.length - 1];
-    const lastOnly = core.length > 1 && !GENERIC.has(last) && words.has(last);
-    const first = core[0];
-    const firstOnly =
-      core.length > 1 && first.length >= 4 && firstCount.get(first) === 1 &&
-      !COLOR_OR_TYPE.has(first) && !GENERIC.has(first) && words.has(first);
-    if (!(all || lastOnly || firstOnly)) return;
+    // A very common word ("sugar", "flour") alone is only a safe nickname when it is clear which ingredient it means:
+    // one ingredient ends with it, or the step says it in the plural ("both sugars") and so means them all
+    const saysPlural = GENERIC.has(last) && new RegExp(`\\b${last}s\\b`).test(lower);
+    const lastOnly = core.length > 1 && words.has(last) && (!GENERIC.has(last) || lastCount.get(last) === 1 || saysPlural);
+    const distinctOnly =
+      core.length > 1 &&
+      core.some((w) => w.length >= 4 && wordCount.get(w) === 1 && !COLOR_OR_TYPE.has(w) && !GENERIC.has(w) && words.has(w));
+    if (!(all || lastOnly || distinctOnly)) return;
 
     // Prefer the line whose amount (and whole name) the step itself mentions
     const amount = ing.raw.toLowerCase().match(/^\s*(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[½¼¾⅓⅔⅛])\s*([a-z]+)?/);
@@ -84,4 +90,30 @@ export function stepIngredients(stepText: string, ingredients: Ingredient[], fac
     for (const k of keep) out.push(scaleIngredient(k.raw, factor));
   }
   return out;
+}
+
+/** A fingerprint of the ingredients and steps. The AI's step-by-step ingredient matches are only trusted while this still agrees. */
+export function stepMapBasis(r: Pick<Recipe, 'ingredients' | 'instructions'>): string {
+  const text = `${r.ingredients.map((i) => i.raw.trim().toLowerCase()).join('|')}#${r.instructions.map((s) => s.text.trim().toLowerCase()).join('|')}`;
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+  return String(h);
+}
+
+/**
+ * The ingredient amounts to show under one step. Uses the AI's matches when they are up to date with the recipe, and
+ * otherwise falls back to matching by name (so a new, edited or offline recipe still shows chips).
+ */
+export function ingredientsForStep(
+  step: InstructionStep,
+  recipe: Pick<Recipe, 'ingredients' | 'instructions' | 'stepMapBasis'>,
+  factor = 1
+): string[] {
+  if (step.ingredientRefs && recipe.stepMapBasis && recipe.stepMapBasis === stepMapBasis(recipe)) {
+    return step.ingredientRefs
+      .map((i) => recipe.ingredients[i])
+      .filter((ing): ing is Ingredient => !!ing)
+      .map((ing) => scaleIngredient(ing.raw, factor));
+  }
+  return stepIngredients(step.text, recipe.ingredients, factor);
 }

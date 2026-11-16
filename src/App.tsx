@@ -9,6 +9,7 @@ import { RecentlyDeletedModal } from './components/RecentlyDeletedModal';
 import { GroceryListModal } from './components/GroceryListModal';
 import { listGrocery } from './services/groceryList';
 import { estimateNutrition } from './services/nutritionService';
+import { mapStepIngredients } from './services/stepMapService';
 import { setProfile, type ProfileName } from './services/profile';
 import { backupRecipe, backupAll, flushBackupQueue } from './services/backupService';
 import {
@@ -225,6 +226,17 @@ export function App({ profile }: { profile: ProfileName }) {
     await RecipeService.setNutrition(recipe.id, nutrition);
     setRecipes(prev => prev.map(r => r.id === recipe.id ? { ...r, nutrition } : r));
     setActiveRecipe(prev => (prev && prev.id === recipe.id ? { ...prev, nutrition } : prev));
+    return true;
+  };
+
+  /** Has the AI work out which ingredients each step uses and saves it. Quietly does nothing if the AI can't right now. */
+  const handleMapSteps = async (recipe: Recipe): Promise<boolean> => {
+    const mapped = await mapStepIngredients(recipe);
+    if (!mapped) return false;
+    await RecipeService.setStepMap(recipe.id, mapped.instructions, mapped.stepMapBasis);
+    const apply = (r: Recipe): Recipe => ({ ...r, instructions: mapped.instructions, stepMapBasis: mapped.stepMapBasis });
+    setRecipes(prev => prev.map(r => r.id === recipe.id ? apply(r) : r));
+    setActiveRecipe(prev => (prev && prev.id === recipe.id ? apply(prev) : prev));
     return true;
   };
 
@@ -684,6 +696,7 @@ export function App({ profile }: { profile: ProfileName }) {
           onAddPhoto={handleAddPhoto}
           onRemovePhoto={handleRemovePhoto}
           onEstimateNutrition={handleEstimateNutrition}
+          onMapSteps={handleMapSteps}
           allFolders={folderNames}
           onSetFolders={handleSetFolders}
           onStartCooking={(r, s) => {

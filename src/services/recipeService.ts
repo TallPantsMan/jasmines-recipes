@@ -1,5 +1,5 @@
 import { db } from './db';
-import type { Recipe, JasmineNote, Nutrition } from '../types/recipe';
+import type { Recipe, JasmineNote, Nutrition, InstructionStep } from '../types/recipe';
 
 const LOCAL_STORAGE_KEY = 'jasmines_recipes_persistent_store_v2';
 const STORAGE_PERSISTED_KEY = 'jasmines_recipes_persisted_storage';
@@ -252,6 +252,23 @@ export const RecipeService = {
 
     try {
       await db.recipes.update(id, { nutrition, updatedAt });
+    } catch {}
+  },
+
+  /** Saves which ingredients each step uses (from the AI), without touching anything else about the recipe. */
+  async setStepMap(id: string, instructions: InstructionStep[], stepMapBasis: string): Promise<void> {
+    const updatedAt = new Date().toISOString();
+    const current = loadFromLocalStorage() || [];
+    const match = current.find(r => r.id === id);
+    if (match) {
+      match.instructions = instructions;
+      match.stepMapBasis = stepMapBasis;
+      match.updatedAt = updatedAt;
+      saveToLocalStorage(current);
+    }
+
+    try {
+      await db.recipes.update(id, { instructions, stepMapBasis, updatedAt });
     } catch {}
   },
 

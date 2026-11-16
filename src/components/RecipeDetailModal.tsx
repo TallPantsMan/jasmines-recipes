@@ -4,7 +4,7 @@ import type { Recipe, JasmineNote } from '../types/recipe';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
 import { stepTimerMinutes } from '../utils/stepTimer';
-import { stepIngredients } from '../utils/stepIngredients';
+import { ingredientsForStep, stepMapBasis } from '../utils/stepIngredients';
 import { addToGrocery } from '../services/groceryList';
 import { nutritionBasis } from '../services/nutritionService';
 import { PROFILES } from '../services/profile';
@@ -30,6 +30,8 @@ interface RecipeDetailModalProps {
   onAddPhoto: (recipeId: string, dataUrl: string) => void;
   onRemovePhoto: (recipeId: string, index: number) => void;
   onEstimateNutrition: (recipe: Recipe) => Promise<boolean>;
+  /** Has the AI work out which ingredients each step uses (saved on the recipe) */
+  onMapSteps: (recipe: Recipe) => Promise<boolean>;
   allFolders: string[];
   onSetFolders: (recipeId: string, folders: string[]) => void;
   onStartCooking: (recipe: Recipe, servings: number) => void;
@@ -51,6 +53,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   onAddPhoto,
   onRemovePhoto,
   onEstimateNutrition,
+  onMapSteps,
   allFolders,
   onSetFolders,
   onStartCooking
@@ -79,6 +82,18 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
     runNutrition();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipe.id, basis]);
+  // The first time a recipe is opened (and again after its ingredients or steps are edited), the AI works out which
+  // ingredients each step uses. Until then, or if it can't, the chips come from matching names.
+  const stepMapBasisNow = stepMapBasis(recipe);
+  const stepMapTried = React.useRef<string>('');
+  useEffect(() => {
+    if (recipe.ingredients.length === 0 || recipe.instructions.length === 0) return;
+    if (recipe.stepMapBasis === stepMapBasisNow) return;
+    if (stepMapTried.current === `${recipe.id}:${stepMapBasisNow}`) return;
+    stepMapTried.current = `${recipe.id}:${stepMapBasisNow}`;
+    void onMapSteps(recipe);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe.id, stepMapBasisNow]);
   const [servings, setServings] = useState<number>(recipe.servings || 4);
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
   const [newNoteText, setNewNoteText] = useState('');
@@ -676,9 +691,9 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                           {step.text}
                         </p>
 
-                        {stepIngredients(step.text, recipe.ingredients, servings / (recipe.servings || servings)).length > 0 && (
+                        {ingredientsForStep(step, recipe, servings / (recipe.servings || servings)).length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            {stepIngredients(step.text, recipe.ingredients, servings / (recipe.servings || servings)).map((line, i) => (
+                            {ingredientsForStep(step, recipe, servings / (recipe.servings || servings)).map((line, i) => (
                               <span key={i} className="text-[11px] font-semibold text-[#786E62] bg-[#F7F2EC] px-2.5 py-0.5 rounded-full">
                                 {line}
                               </span>

@@ -5,7 +5,7 @@ import confetti from 'canvas-confetti';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
 import { stepTimerMinutes } from '../utils/stepTimer';
-import { stepIngredients } from '../utils/stepIngredients';
+import { ingredientsForStep } from '../utils/stepIngredients';
 import { notify } from '../services/dialog';
 
 const TEXT_SIZES = [
@@ -90,7 +90,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({
   const currentStep = recipe.instructions[currentStepIndex];
   const stepMinutes = currentStep ? stepTimerMinutes(currentStep) : undefined;
   const stepIngs = currentStep
-    ? stepIngredients(currentStep.text, recipe.ingredients, initialServings / (recipe.servings || initialServings))
+    ? ingredientsForStep(currentStep, recipe, initialServings / (recipe.servings || initialServings))
     : [];
 
   const handleNext = () => {

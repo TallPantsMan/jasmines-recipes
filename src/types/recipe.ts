@@ -13,6 +13,8 @@ export interface InstructionStep {
   text: string;
   section?: string;
   timerMinutes?: number;
+  /** Positions in the recipe's ingredient list of the ingredients this step uses (worked out by the AI) */
+  ingredientRefs?: number[];
 }
 
 export interface JasmineNote {
@@ -59,6 +61,8 @@ export interface Recipe {
   importedBy?: string;
   /** AI estimate per serving, worked out from the ingredients */
   nutrition?: Nutrition;
+  /** Fingerprint of the ingredients and steps the steps' ingredientRefs were worked out for; if it no longer matches, they are out of date */
+  stepMapBasis?: string;
   /** Cookbook folders (made by the family, e.g. "Holidays") this recipe has been put in */
   folders?: string[];
   cookedCount?: number;
