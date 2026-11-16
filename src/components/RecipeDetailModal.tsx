@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { recipeImageSrc, generatedCover } from '../services/imageService';
+import { recipeImageSrc, generatedCover, fileToCompressedDataUrl } from '../services/imageService';
 import type { Recipe, JasmineNote } from '../types/recipe';
 import { formatMinutes } from '../utils/formatTime';
 import { scaleIngredient } from '../utils/scaleIngredient';
@@ -11,7 +11,7 @@ import { PROFILES } from '../services/profile';
 import { notify, askConfirm } from '../services/dialog';
 import {
   X, Heart, Star, Play, Plus, Trash2, Edit3,
-  ExternalLink, Camera, Check, Timer, MessageSquare, Bookmark, FolderOpen
+  ExternalLink, Camera, Image as ImageIcon, Check, Timer, MessageSquare, Bookmark, FolderOpen
 } from 'lucide-react';
 
 interface RecipeDetailModalProps {
@@ -29,6 +29,8 @@ interface RecipeDetailModalProps {
   onDeleteNote: (recipeId: string, noteId: string) => void;
   onAddPhoto: (recipeId: string, dataUrl: string) => void;
   onRemovePhoto: (recipeId: string, index: number) => void;
+  /** Makes one of the family's photos the cover (index), or puts the original cover back (null) */
+  onSetCoverPhoto: (recipeId: string, index: number | null) => void;
   onEstimateNutrition: (recipe: Recipe) => Promise<boolean>;
   /** Has the AI work out which ingredients each step uses (saved on the recipe) */
   onMapSteps: (recipe: Recipe) => Promise<boolean>;
@@ -52,6 +54,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   onDeleteNote,
   onAddPhoto,
   onRemovePhoto,
+  onSetCoverPhoto,
   onEstimateNutrition,
   onMapSteps,
   allFolders,
@@ -156,14 +159,23 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        onAddPhoto(recipe.id, dataUrl);
-      }
-    };
-    reader.readAsDataURL(file);
+    e.target.value = ''; // lets the same photo be picked again
+
+    // Phone photos are several megabytes; a smaller copy looks the same on screen and is small enough to keep safe
+    fileToCompressedDataUrl(file, 1200, 0.78)
+      .then((dataUrl) => {
+        if (dataUrl) {
+          onAddPhoto(recipe.id, dataUrl);
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const raw = event.target?.result as string;
+          if (raw) onAddPhoto(recipe.id, raw);
+        };
+        reader.readAsDataURL(file);
+      })
+      .catch(() => {});
   };
 
   return (
@@ -577,11 +589,24 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         <img src={photo} alt={`Cook snapshot ${idx + 1}`} className="w-full h-full object-cover" />
                         <button
                           onClick={() => onRemovePhoto(recipe.id, idx)}
-                          className="absolute top-1.5 right-1.5 p-1 bg-black/60 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          className="absolute top-1.5 right-1.5 p-1 bg-black/60 hover:bg-red-600 text-white rounded-full sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
                           title="Remove photo"
                         >
-                          <Trash2 className="w-3 3" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
+                        {recipe.coverImage === photo ? (
+                          <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FF5B26] text-white text-[10px] font-bold">
+                            <ImageIcon className="w-3 h-3" /> Cover
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => onSetCoverPhoto(recipe.id, idx)}
+                            className="absolute bottom-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 hover:bg-[#FF5B26] text-white text-[10px] font-bold sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
+                            title="Use this photo as the recipe's cover"
+                          >
+                            <ImageIcon className="w-3 h-3" /> Make cover
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -589,6 +614,14 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                   <div className="py-4 rounded-2xl bg-[#FDFBF7] border border-dashed border-[#DFD5C7] text-center text-xs text-[#857B6E]">
                     Snap a photo of your finished plate or cookbook page!
                   </div>
+                )}
+                {recipe.originalCoverImage !== undefined && (
+                  <button
+                    onClick={() => onSetCoverPhoto(recipe.id, null)}
+                    className="mt-2 text-[11px] font-bold text-[#8A8072] hover:text-[#FF5B26] underline underline-offset-2 cursor-pointer"
+                  >
+                    Go back to the original cover
+                  </button>
                 )}
               </div>
 

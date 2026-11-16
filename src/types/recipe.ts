@@ -44,6 +44,8 @@ export interface Recipe {
   sourceUrl?: string;
   sourceName?: string;
   coverImage?: string;
+  /** The cover the recipe had before one of the family's own photos was made the cover, so it can be put back */
+  originalCoverImage?: string;
   userPhotos: string[];
   servings: number;
   prepTimeMinutes?: number;

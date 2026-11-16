@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { fetchInstagramCover } from './services/imageService';
+import { fetchInstagramCover, compressImageDataUrl } from './services/imageService';
 import type { Recipe, FilterCategory, JasmineNote } from './types/recipe';
 import { RecipeService } from './services/recipeService';
 import { signOut } from './services/auth';
@@ -337,6 +337,29 @@ export function App({ profile }: { profile: ProfileName }) {
         userPhotos: [...(prev.userPhotos || []), dataUrl]
       } : null);
     }
+  };
+
+  /** Makes one of the family's own photos the recipe's cover (index), or puts the original cover back (null). */
+  const handleSetCoverPhoto = async (recipeId: string, index: number | null) => {
+    const r = recipes.find(x => x.id === recipeId);
+    if (!r) return;
+    const photos = r.userPhotos || [];
+    let coverImage: string | undefined;
+    let originalCoverImage: string | undefined;
+    if (index === null) {
+      coverImage = r.originalCoverImage || undefined;
+    } else {
+      const photo = photos[index];
+      if (!photo) return;
+      // Older photos were saved full size; a cover only needs a smaller copy
+      coverImage = photo.length > 400_000 ? await compressImageDataUrl(photo, 900, 0.8) : photo;
+      // "originalCoverImage" being set at all means the cover is currently one of the family's photos ('' = there was no cover)
+      originalCoverImage = r.originalCoverImage !== undefined ? r.originalCoverImage : r.coverImage || '';
+    }
+    await RecipeService.setCover(recipeId, coverImage, originalCoverImage);
+    const apply = (x: Recipe): Recipe => ({ ...x, coverImage, originalCoverImage });
+    setRecipes(prev => prev.map(x => (x.id === recipeId ? apply(x) : x)));
+    setActiveRecipe(prev => (prev && prev.id === recipeId ? apply(prev) : prev));
   };
 
   const handleRemovePhoto = async (recipeId: string, index: number) => {
@@ -695,6 +718,7 @@ export function App({ profile }: { profile: ProfileName }) {
           onDeleteNote={handleDeleteNote}
           onAddPhoto={handleAddPhoto}
           onRemovePhoto={handleRemovePhoto}
+          onSetCoverPhoto={handleSetCoverPhoto}
           onEstimateNutrition={handleEstimateNutrition}
           onMapSteps={handleMapSteps}
           allFolders={folderNames}

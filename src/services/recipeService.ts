@@ -114,10 +114,13 @@ export const RecipeService = {
     }
 
     if (fromLs && fromLs.length > 0) {
+      // The browser's backup copy can lack photos, so it only fills in recipes the main store is missing
+      const have = new Set(fromIdb.map(r => r.id));
+      const missing = fromLs.filter(r => !have.has(r.id));
       try {
-        await db.recipes.bulkPut(fromLs);
+        if (missing.length) await db.recipes.bulkPut(missing);
       } catch {}
-      return fromLs;
+      return [...fromIdb, ...missing];
     }
 
     if (fromIdb.length > 0) {
@@ -379,8 +382,45 @@ export const RecipeService = {
     }
   },
 
+  /** Sets the recipe's cover (for example one of the family's own photos), remembering the original so it can be put back. */
+  async setCover(id: string, coverImage: string | undefined, originalCoverImage: string | undefined): Promise<void> {
+    const updatedAt = new Date().toISOString();
+    const current = loadFromLocalStorage() || [];
+    const match = current.find(r => r.id === id);
+    if (match) {
+      match.coverImage = coverImage;
+      match.originalCoverImage = originalCoverImage;
+      match.updatedAt = updatedAt;
+      saveToLocalStorage(current);
+    }
+
+    try {
+      await db.recipes.update(id, { coverImage, originalCoverImage, updatedAt });
+    } catch {}
+  },
+
   /** Applies changes that came from the cloud copy, keeping their original edit times. */
-  async applyRemote(recipes: Recipe[], deleteIds: string[]): Promise<void> {
+  async applyRemote(incoming: Recipe[], deleteIds: string[]): Promise<void> {
+    // The cloud copy often can't hold a recipe's photos (too big), so it must never wipe the ones on this device:
+    // keep this device's own photos and cover, and add any the cloud copy does have.
+    const mine = new Map<string, Recipe>();
+    try {
+      (await db.recipes.bulkGet(incoming.map(r => r.id))).forEach(r => r && mine.set(r.id, r));
+    } catch {}
+    for (const r of loadFromLocalStorage() || []) if (!mine.has(r.id)) mine.set(r.id, r);
+    const recipes = incoming.map(r => {
+      const local = mine.get(r.id);
+      if (!local) return r;
+      const photos = [...(local.userPhotos || [])];
+      for (const p of r.userPhotos || []) if (!photos.includes(p)) photos.push(p);
+      return {
+        ...r,
+        userPhotos: photos,
+        coverImage: r.coverImage || local.coverImage,
+        originalCoverImage: r.originalCoverImage ?? local.originalCoverImage,
+      };
+    });
+
     try {
       if (recipes.length) await db.recipes.bulkPut(recipes);
       if (deleteIds.length) await db.recipes.bulkDelete(deleteIds);

@@ -15,13 +15,16 @@ async function callSheet(body: Record<string, unknown>): Promise<any> {
   return r.json().catch(() => null);
 }
 
-/** Squeezes a recipe under the cell limit: first drop the user's own photos, then a photo cover. */
+/** Squeezes a recipe under the cell limit: keeps as many of the newest photos as fit, then drops the rest, then a photo cover. */
 function fit(recipe: any): string | null {
   let json = JSON.stringify(recipe);
   if (json.length <= MAX_JSON) return json;
-  json = JSON.stringify({ ...recipe, userPhotos: [] });
-  if (json.length <= MAX_JSON) return json;
-  json = JSON.stringify({ ...recipe, userPhotos: [], coverImage: undefined });
+  const photos: string[] = Array.isArray(recipe.userPhotos) ? recipe.userPhotos : [];
+  for (let keep = photos.length - 1; keep >= 0; keep--) {
+    json = JSON.stringify({ ...recipe, userPhotos: photos.slice(photos.length - keep) });
+    if (json.length <= MAX_JSON) return json;
+  }
+  json = JSON.stringify({ ...recipe, userPhotos: [], coverImage: undefined, originalCoverImage: undefined });
   return json.length <= MAX_JSON ? json : null;
 }
 
