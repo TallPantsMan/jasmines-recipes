@@ -42,6 +42,21 @@ async function callRender(targetUrl: string, mode?: 'pdf'): Promise<any> {
   }
 }
 
+/** The Internet Archive's saved copy of a page, for sites that turn away automated visitors. */
+export async function fetchArchivedHtml(targetUrl: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 35000);
+  try {
+    const res = await apiFetch(`/api/archive?url=${encodeURIComponent(targetUrl)}`, { signal: controller.signal });
+    if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (typeof data.html !== 'string' || data.html.length < 200) throw new Error('empty');
+    return data.html;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** The page as a real browser shows it once everything has loaded (for pages that build themselves after loading). */
 export async function fetchRenderedHtml(targetUrl: string): Promise<string> {
   const data = await callRender(targetUrl);

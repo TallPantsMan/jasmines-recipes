@@ -4,7 +4,7 @@ import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../t
 import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl, fetchVideoRecipeFromUrl, isVideoLink, pageTextFromHtml } from '../services/recipeParser';
 import { processCookbookImages, type OcrProgress } from '../services/ocrService';
 import { fileToCompressedDataUrl } from '../services/imageService';
-import { fetchPageHtml, fetchRenderedHtml, fetchRecipeFromPagePdf } from '../services/pageFetcher';
+import { fetchPageHtml, fetchArchivedHtml, fetchRenderedHtml, fetchRecipeFromPagePdf } from '../services/pageFetcher';
 import { refineWithAi, refineParsedRecipe, mergeAiRecipe } from '../services/aiClean';
 import { looksLikeRecipeCode } from '../services/shareService';
 import {
@@ -206,7 +206,17 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         // try the next way
       }
 
-      // 2. Open the page in a hidden browser and read what it shows once loaded
+      // 2. Sites that block automated visitors: the Internet Archive's saved copy (fast, may be a little old)
+      if (!recipe) {
+        setScrapeStatus('Looking for a saved copy of the page...');
+        try {
+          recipe = await recipeFromHtml(await fetchArchivedHtml(targetUrl));
+        } catch {
+          // try the next way
+        }
+      }
+
+      // 3. Open the page in a hidden browser and read what it shows once loaded
       if (!recipe) {
         setScrapeStatus('Opening the page like a browser...');
         try {
@@ -216,7 +226,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         }
       }
 
-      // 3. Save the page as a PDF and have the AI read that
+      // 4. Save the page as a PDF and have the AI read that
       if (!recipe) {
         setScrapeStatus('Reading a PDF copy of the page...');
         try {
