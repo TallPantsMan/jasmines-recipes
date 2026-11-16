@@ -4,8 +4,8 @@ import type { Recipe, RecipeSourceType, Ingredient, InstructionStep } from '../t
 import { parseRecipeFromHtml, parseRawRecipeText, fetchInstagramRecipeFromUrl, fetchVideoRecipeFromUrl, isVideoLink, pageTextFromHtml } from '../services/recipeParser';
 import { processCookbookImages, type OcrProgress } from '../services/ocrService';
 import { fileToCompressedDataUrl } from '../services/imageService';
-import { fetchPageHtml } from '../services/pageFetcher';
-import { refineWithAi, refineParsedRecipe } from '../services/aiClean';
+import { fetchPageHtml, fetchRenderedHtml, fetchRecipeFromPagePdf } from '../services/pageFetcher';
+import { refineWithAi, refineParsedRecipe, mergeAiRecipe } from '../services/aiClean';
 import { looksLikeRecipeCode } from '../services/shareService';
 import {
   X, Globe, BookOpen, PenTool, Sparkles,
@@ -41,6 +41,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [urlInput, setUrlInput] = useState('');
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeError, setScrapeError] = useState('');
+  const [scrapeStatus, setScrapeStatus] = useState('');
   // Shown on the review form when an import came back without ingredients or steps
   const [importNotice, setImportNotice] = useState('');
 
@@ -174,36 +175,75 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setScrapeError('');
     setInstagramError(null);
 
-    try {
-      const html = await fetchPageHtml(targetUrl);
-
+    // Turns a page's HTML into a recipe, or null when it holds no usable ingredients and steps
+    const recipeFromHtml = async (html: string): Promise<Partial<Recipe> | null> => {
       const parsed = parseRecipeFromHtml(html, targetUrl);
-      if (parsed) {
-        setSourceType('website');
-        if (!parsed.ingredients?.length || !parsed.instructions?.length) {
-          // No recipe data behind the page: read its visible text instead
-          const pageText = pageTextFromHtml(html);
-          if (pageText) {
-            const fromText = parseRawRecipeText(pageText, parsed.title, { source: 'text' });
-            const { creator: _creator, ...refined } = await refineWithAi(pageText, fromText);
-            if (refined.ingredients?.length && refined.instructions?.length) {
-              applyParsedRecipe({
-                ...refined,
-                title: refined.title || parsed.title,
-                sourceType: 'website',
-                sourceUrl: targetUrl,
-                sourceName: parsed.sourceName,
-                coverImage: parsed.coverImage,
-              });
-              return;
-            }
-          }
-          throw new Error('No ingredients or steps found on page.');
-        }
-        applyParsedRecipe(await refineParsedRecipe(parsed));
-      } else {
-        throw new Error('No structured recipe found on page.');
+      if (!parsed) return null;
+      if (parsed.ingredients?.length && parsed.instructions?.length) return refineParsedRecipe(parsed);
+      // No recipe data behind the page: read its visible text instead
+      const pageText = pageTextFromHtml(html);
+      if (!pageText) return null;
+      const fromText = parseRawRecipeText(pageText, parsed.title, { source: 'text' });
+      const { creator: _creator, ...refined } = await refineWithAi(pageText, fromText);
+      if (!refined.ingredients?.length || !refined.instructions?.length) return null;
+      return {
+        ...refined,
+        title: refined.title || parsed.title,
+        sourceType: 'website',
+        sourceUrl: targetUrl,
+        sourceName: parsed.sourceName,
+        coverImage: parsed.coverImage,
+      };
+    };
+
+    try {
+      let recipe: Partial<Recipe> | null = null;
+
+      // 1. Plain download of the page
+      try {
+        recipe = await recipeFromHtml(await fetchPageHtml(targetUrl));
+      } catch {
+        // try the next way
       }
+
+      // 2. Open the page in a hidden browser and read what it shows once loaded
+      if (!recipe) {
+        setScrapeStatus('Opening the page like a browser...');
+        try {
+          recipe = await recipeFromHtml(await fetchRenderedHtml(targetUrl));
+        } catch {
+          // try the next way
+        }
+      }
+
+      // 3. Save the page as a PDF and have the AI read that
+      if (!recipe) {
+        setScrapeStatus('Reading a PDF copy of the page...');
+        try {
+          const { recipe: ai, image } = await fetchRecipeFromPagePdf(targetUrl);
+          let domain = 'Web Recipe';
+          try {
+            domain = new URL(targetUrl).hostname.replace(/^www\./, '');
+          } catch {
+            // keep the generic name
+          }
+          const { creator: _creator, ...fromPdf } = mergeAiRecipe(ai, {
+            sourceType: 'website',
+            sourceUrl: targetUrl,
+            sourceName: domain,
+            coverImage: image,
+            categories: [],
+            tags: [],
+          } as Partial<Recipe>);
+          if (fromPdf.ingredients?.length && fromPdf.instructions?.length) recipe = fromPdf;
+        } catch {
+          // fall through to the paste-it-yourself message
+        }
+      }
+
+      if (!recipe) throw new Error('No ingredients or steps found on page.');
+      setSourceType('website');
+      applyParsedRecipe(recipe);
     } catch {
       setScrapeError(
         'Could not auto-scrape this page (some food blogs block proxies). You can paste the recipe text in the box below!'
@@ -211,6 +251,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       setShowManualCaptionFallback(true);
     } finally {
       setIsScraping(false);
+      setScrapeStatus('');
     }
   };
 
@@ -529,7 +570,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                   {isScraping || isPullingInstagram ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>{isPullingInstagram ? 'Pulling Caption...' : 'Extracting Ingredients & Steps...'}</span>
+                      <span>{isPullingInstagram ? 'Pulling Caption...' : scrapeStatus || 'Extracting Ingredients & Steps...'}</span>
                     </>
                   ) : (
                     <>

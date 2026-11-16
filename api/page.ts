@@ -1,21 +1,8 @@
 import { requireLogin } from './_auth.js';
+import { isBlockedHost } from './_net.js';
 
 const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-
-/** Refuse addresses that point back into a private network, so this route can't be used to probe one */
-function isBlockedHost(hostname: string): boolean {
-  const h = hostname.toLowerCase();
-  return (
-    h === 'localhost' ||
-    h.endsWith('.local') ||
-    h.endsWith('.internal') ||
-    /^(?:127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(h) ||
-    /^172\.(?:1[6-9]|2\d|3[01])\./.test(h) ||
-    h === '::1' ||
-    h.startsWith('[')
-  );
-}
 
 // Fetches a recipe web page on the server (no browser CORS limits) and returns its HTML.
 export default async function handler(req: any, res: any) {

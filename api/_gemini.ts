@@ -30,7 +30,7 @@ export class GeminiError extends Error {
 }
 
 /** Sends text to Gemini and returns its answer, already parsed from JSON in the shape of `schema`. */
-export async function askGeminiJson(system: string, text: string, schema: unknown): Promise<any> {
+export async function askGeminiJson(system: string, text: string, schema: unknown, pdfBase64?: string): Promise<any> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new GeminiError('AI is not set up on the server', true);
 
@@ -47,10 +47,11 @@ export async function askGeminiJson(system: string, text: string, schema: unknow
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text }] }],
+        // A PDF (for example a saved web page) goes along as an attachment; Gemini reads its text and pictures
+        contents: [{ role: 'user', parts: [...(pdfBase64 ? [{ inlineData: { mimeType: 'application/pdf', data: pdfBase64 } }] : []), { text }] }],
         generationConfig,
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(pdfBase64 ? 40000 : 25000),
     });
   };
 

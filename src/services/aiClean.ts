@@ -45,32 +45,8 @@ export async function refineParsedRecipe<T extends Partial<Recipe>>(parsed: T): 
   return refined as unknown as T;
 }
 
-/**
- * Asks the server's AI to tidy a messy recipe. Anything the AI gets wrong or can't do falls back to what our own
- * parser already found, so a failure here only means "no extra polish", never a lost recipe.
- */
-export async function refineWithAi<T extends Partial<Recipe>>(
-  text: string,
-  parsed: T
-): Promise<T & { creator?: string }> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    let res: Response;
-    try {
-      res = await apiFetch('/api/clean', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return parsed;
-    const ai: AiRecipe | undefined = (await res.json())?.recipe;
-    if (!ai) return parsed;
-
+/** Lays the AI's answer over what our own parser found, trusting the AI only where it produced something. */
+export function mergeAiRecipe<T extends Partial<Recipe>>(ai: AiRecipe, parsed: T): T & { creator?: string } {
     const stamp = Date.now();
     const ingredients = strings(ai.ingredients);
     const steps = strings(ai.steps);
@@ -98,7 +74,36 @@ export async function refineWithAi<T extends Partial<Recipe>>(
     }
     if (tags.length > 0) merged.tags = tags;
     if (ai.creator?.trim()) merged.creator = ai.creator.trim().replace(/^@/, '');
-    return merged as T & { creator?: string };
+  return merged as T & { creator?: string };
+}
+
+/**
+ * Asks the server's AI to tidy a messy recipe. Anything the AI gets wrong or can't do falls back to what our own
+ * parser already found, so a failure here only means "no extra polish", never a lost recipe.
+ */
+export async function refineWithAi<T extends Partial<Recipe>>(
+  text: string,
+  parsed: T
+): Promise<T & { creator?: string }> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await apiFetch('/api/clean', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return parsed;
+    const ai: AiRecipe | undefined = (await res.json())?.recipe;
+    if (!ai) return parsed;
+
+    return mergeAiRecipe(ai, parsed);
   } catch {
     return parsed;
   }

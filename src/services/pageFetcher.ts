@@ -29,6 +29,33 @@ async function getText(url: string, expectJson = false): Promise<string> {
   }
 }
 
+/** Calls our hidden-browser route (/api/render), which is slow (a few seconds to half a minute), so it gets a long wait. */
+async function callRender(targetUrl: string, mode?: 'pdf'): Promise<any> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  try {
+    const res = await apiFetch(`/api/render?url=${encodeURIComponent(targetUrl)}${mode ? `&mode=${mode}` : ''}`, { signal: controller.signal });
+    if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The page as a real browser shows it once everything has loaded (for pages that build themselves after loading). */
+export async function fetchRenderedHtml(targetUrl: string): Promise<string> {
+  const data = await callRender(targetUrl);
+  if (typeof data.html !== 'string' || data.html.length < 200) throw new Error('empty');
+  return data.html;
+}
+
+/** The page saved as a PDF on the server and read by the AI. Last resort: also reads recipes that are pictures. */
+export async function fetchRecipeFromPagePdf(targetUrl: string): Promise<{ recipe: any; image?: string }> {
+  const data = await callRender(targetUrl, 'pdf');
+  if (!data.recipe) throw new Error('empty');
+  return { recipe: data.recipe, image: typeof data.image === 'string' ? data.image : undefined };
+}
+
 export async function fetchPageHtml(targetUrl: string): Promise<string> {
   const enc = encodeURIComponent(targetUrl);
   const routes: Array<() => Promise<string>> = [
